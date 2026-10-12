@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { audio } from './game/audio';
 import { loadSave, writeSave, type SaveData } from './game/save';
-import { renderThumbnails } from './ui/thumbs';
+import { initThumbnails } from './ui/thumbs';
 import { clear } from './ui/dom';
 import * as screens from './ui/screens';
 import { MenuView } from './views/menuView';
@@ -39,7 +39,7 @@ export class App {
       alpha: false,
     });
     this.applyQuality();
-    renderThumbnails(this.renderer);
+    initThumbnails(this.renderer);
 
     const unlock = () => audio.unlock();
     window.addEventListener('pointerdown', unlock, { passive: true });

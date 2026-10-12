@@ -22,8 +22,20 @@ function think(b: Battle) {
   }
   // Economy.
   const sunflowers = b.plants.filter((p) => p.def.id === 'sunflower').length;
+  const thistles = b.plants.filter((p) => p.def.id === 'seekerthistle').length;
+  if (b.loadout.includes('seekerthistle') && sunflowers >= 3 && thistles < 2) {
+    for (let lane = 1; lane < LANES; lane += 2) if (tryPlant('seekerthistle', 1, lane)) return;
+    return; // save up for anti-air
+  }
   if (sunflowers < 5) {
     for (let lane = 0; lane < LANES; lane++) if (tryPlant('sunflower', 0, lane)) return;
+  }
+  // Anti-air and anti-shield specialists when needed.
+  if (b.loadout.includes('seekerthistle') && b.aliveZombies.some((z) => b.isFlying(z))) {
+    for (let lane = 0; lane < LANES; lane++) if (tryPlant('seekerthistle', 3, lane)) return;
+  }
+  if (b.loadout.includes('melonmortar')) {
+    for (let lane = 0; lane < LANES; lane++) if (zombiesIn(lane).some((z) => z.shield > 0) && (tryPlant('melonmortar', 1, lane) || tryPlant('melonmortar', 2, lane))) return;
   }
   // Defend lanes with zombies first, then the rest.
   const lanes = [...Array(LANES).keys()].sort((a, c) => zombiesIn(c).length - zombiesIn(a).length);
@@ -33,7 +45,7 @@ function think(b: Battle) {
     }
   }
   for (const lane of lanes) {
-    if (zombiesIn(lane).some((z) => z.armor > 0) && tryPlant('wallnut', 6, lane)) return;
+    if (zombiesIn(lane).some((z) => z.armor > 0 || z.def.vault) && (tryPlant('towernut', 6, lane) || tryPlant('wallnut', 6, lane))) return;
   }
   if (sunflowers < 10) for (let lane = 0; lane < LANES; lane++) if (tryPlant('sunflower', 3, lane)) return;
   for (const lane of lanes) if (tryPlant('snowpea', 4, lane) || tryPlant('repeater', 5, lane)) return;
@@ -44,7 +56,10 @@ describe('balance', () => {
     it(`level ${level.id} is beatable without Ultimate Mode`, () => {
       const save = defaultSave();
       save.ultimate.enabled = false;
-      const b = new Battle(new THREE.Scene(), level, ['sunflower', 'peashooter', 'repeater', 'wallnut', 'cherrybomb', 'snowpea'], rules(save), {
+      const kinds = new Set(level.waves.flatMap((w) => w.zombies));
+      const loadout = ['sunflower', 'peashooter', 'repeater', kinds.has('vaulter') ? 'towernut' : 'wallnut', 'cherrybomb'];
+      loadout.push(kinds.has('balloon') ? 'seekerthistle' : kinds.has('door') ? 'melonmortar' : 'snowpea');
+      const b = new Battle(new THREE.Scene(), level, loadout, rules(save), {
         rng: mulberry(42),
         autoCollectSun: true,
       });

@@ -9,11 +9,11 @@ import {
   WORLDS,
   ZOMBIES,
   ZOMBIE_ORDER,
-  levelMultipliers,
   type LevelDef,
   type PlantId,
   type ZombieId,
 } from '../game/config';
+import { plantStats } from '../game/plants/stats';
 import { rules, defaultSave, type UltimateSettings, type GameSettings } from '../game/save';
 import type { BattleView } from '../views/battleView';
 import { clear, h } from './dom';
@@ -200,14 +200,10 @@ export function almanacScreen(app: App) {
       }
       const d = PLANTS[plant];
       const lvl = r.plantLevel(plant);
-      const m = levelMultipliers(lvl);
-      const stats = [stat('Sun cost', String(d.cost)), stat('Recharge', `${(d.recharge * m.recharge).toFixed(1)}s`), stat('Toughness', d.toughness)];
-      if (d.damage) stats.push(stat('Damage', `${Math.round(d.damage * m.damage)} × ${d.shots}`));
-      if (d.blastDamage) stats.push(stat('Blast', String(Math.round(d.blastDamage * m.damage))));
-      if (d.sunAmount) stats.push(stat('Sun', `${Math.round((d.sunAmount * m.sun) / 5) * 5} / ${d.sunInterval}s`));
+      const stats = plantStats(d, lvl).map((l) => stat(l.label, l.value));
       detail.append(
         h('img', { class: 'alm-big', attrs: { src: plantThumb(plant), alt: d.name } }),
-        h('div', { class: 'alm-info' }, h('h3', { text: d.name }), h('div', { class: 'stars', text: `${stars(lvl)}  Level ${lvl}` }), h('div', { class: 'stats' }, ...stats), h('p', { text: d.blurb }), h('p', { class: 'pf-line', text: `🌿 Plant Food — ${d.plantFood}` }), h('small', { class: 'unlocked', text: '🔓 Unlocked' })),
+        h('div', { class: 'alm-info' }, h('h3', { text: d.name }), h('div', { class: 'stars', text: `${stars(lvl)}  Level ${lvl}` }), h('div', { class: 'stats' }, ...stats), h('p', { text: d.blurb }), h('p', { class: 'pf-line', text: `🌿 Plant Food — ${d.pfText}` }), h('small', { class: 'unlocked', text: '🔓 Unlocked' })),
       );
     } else {
       for (const id of ZOMBIE_ORDER) {

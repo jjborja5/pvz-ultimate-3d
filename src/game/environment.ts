@@ -2,7 +2,31 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { COLS, LANES } from './config';
-import { G, toon } from './models';
+import { toonGradient } from './models/kit';
+
+// Scenery uses simple shared cel-shaded materials (merged into a few draw calls below).
+const matCache = new Map<string, THREE.MeshToonMaterial>();
+function toon(color: string) {
+  let m = matCache.get(color);
+  if (!m) {
+    m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient() });
+    matCache.set(color, m);
+  }
+  return m;
+}
+const geoCache = new Map<string, THREE.BufferGeometry>();
+function cached(key: string, make: () => THREE.BufferGeometry) {
+  let g = geoCache.get(key);
+  if (!g) geoCache.set(key, (g = make()));
+  return g;
+}
+const G = {
+  sphere: () => cached('sphere', () => new THREE.SphereGeometry(1, 18, 14)),
+  sphereLo: () => cached('sphereLo', () => new THREE.SphereGeometry(1, 10, 8)),
+  cyl: () => cached('cyl', () => new THREE.CylinderGeometry(1, 1, 1, 14)),
+  cone: () => cached('cone', () => new THREE.ConeGeometry(1, 1, 16)),
+  box: () => cached('box', () => new THREE.BoxGeometry(1, 1, 1)),
+};
 
 export const TILE = 1;
 /** World x of a column center. */

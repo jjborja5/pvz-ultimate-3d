@@ -1,0 +1,13 @@
+// The full plant roster, assembled from tested batches.
+import { BATCH1 } from './batch1';
+import type { Family, PlantDef } from './types';
+
+export const PLANT_LIST: PlantDef[] = [...BATCH1];
+
+export const PLANTS: Record<string, PlantDef> = Object.fromEntries(PLANT_LIST.map((p) => [p.id, p]));
+
+export const PLANT_ORDER: string[] = PLANT_LIST.map((p) => p.id);
+
+export function plantsByFamily(f: Family | 'all'): PlantDef[] {
+  return f === 'all' ? PLANT_LIST : PLANT_LIST.filter((p) => p.family === f);
+}

@@ -3,7 +3,9 @@ import * as THREE from 'three';
 import type { View } from '../app';
 import { ZOMBIES, type PlantId, type ZombieId } from '../game/config';
 import { buildEnvironment, colX, laneZ, type Environment } from '../game/environment';
-import { buildPlant, buildZombie, type PlantModel, type ZombieModel } from '../game/models';
+import { buildPlant, type PlantModel } from '../game/models/plants';
+import { buildZombie, type ZombieModel } from '../game/models/zombies';
+import { disposeInstance } from '../game/models/kit';
 
 export class MenuView implements View {
   readonly scene = new THREE.Scene();
@@ -81,6 +83,7 @@ export class MenuView implements View {
   }
 
   dispose() {
-    for (const z of this.zombies) for (const m of z.mats) m.dispose();
+    for (const z of this.zombies) disposeInstance(z.inst);
+    for (const p of this.plants) disposeInstance(p.inst);
   }
 }
