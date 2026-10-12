@@ -1,5 +1,6 @@
 import './styles.css';
 import { App } from './app';
+import { registerServiceWorker } from './ui/platform';
 
 // Block iOS Safari pinch-zoom / double-tap zoom / long-press callouts during play.
 document.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -9,7 +10,7 @@ document.addEventListener(
   'touchmove',
   (e) => {
     const t = e.target as HTMLElement;
-    if (!t.closest('.scroll, .world-tabs, .alm-list, .seed-grid, .zlist, .seed-panel, .alm-detail')) e.preventDefault();
+    if (!t.closest('.scroll, .scroll-x, .world-tabs, .alm-list, .seed-grid, .zlist, .seed-panel, .alm-detail, .packets, textarea')) e.preventDefault();
   },
   { passive: false },
 );
@@ -29,6 +30,8 @@ function boot() {
     loading?.remove();
   }
 }
+
+registerServiceWorker();
 
 // Let the loading screen paint first.
 requestAnimationFrame(() => setTimeout(boot, 30));

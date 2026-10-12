@@ -93,22 +93,33 @@ and the settings are saved automatically.
 Progress, currencies, upgrades, loadout, Ultimate settings and the daily streak are saved automatically.
 Phase 1 saves are migrated: levels you beat are mapped to the new level numbers, and nothing is lost.
 
-## 📱 How to play on your iPhone
+## 📱 How to play on your iPhone (fullscreen)
 
-**Play from GitHub Pages (a permanent link that works once the PR is merged)**
-1. In Safari, open the repository on github.com → **Settings** → **Pages** → under *Build and deployment* set **Source = GitHub Actions** (one-time).
-2. Merge the pull request(s) into `main`. The *Deploy to GitHub Pages* workflow publishes the game to
-   `https://jjborja5.github.io/pvz-ultimate-3d/` (the Actions tab shows progress).
-3. Open that link in Safari, turn the phone sideways and play.
-4. Optional: tap **Share → Add to Home Screen** to get a full-screen app icon with no Safari bars.
+**Standalone game:** https://jjborja5.github.io/pvz-ultimate-3d/
 
-**Tips:** flip the iPhone's silent switch off to hear sound, because iOS mutes web audio in silent mode. Sound starts after your first tap.
+1. Open that link in **Safari** (not inside another app's viewer).
+2. Tap the **Share** button (the square with an arrow pointing up).
+3. Scroll down, tap **Add to Home Screen**, then **Add**.
+4. Launch **PvZ Ultimate** from the new icon and turn the phone sideways. It runs fullscreen in
+   landscape with no Safari bars, works offline after the first launch, and saves automatically.
+
+The title screen's **📲 Play Fullscreen** button shows these steps inside the game.
+
+**Moving your progress:** saves are stored separately for each website. In the copy that has your progress,
+go to **Settings → Transfer Progress → Copy my code**. Then in the Home Screen app, open the same panel,
+paste the code and tap **Load code** twice.
+
+**Tips:** flip the iPhone's silent switch off to hear sound, because iOS mutes web audio in silent mode.
+Sound starts after your first tap.
+
+**Hosting:** the `gh-pages` branch holds the built site. After a merge to `main`, the *Deploy to GitHub Pages*
+workflow rebuilds and republishes it (Settings → Pages → Source: *Deploy from a branch*, `gh-pages`, `/ (root)`).
 
 ### Controls
 - **Plant:** tap a seed packet, then tap a lawn tile, or drag the packet onto the lawn.
 - **Collect sun:** tap it, or swipe your finger across it.
-- **Plant Food:** tap 🌿, then tap a plant.
-- **Shovel:** tap ⛏️, then tap a plant.
+- **Plant Food:** tap 🌿 then tap a plant (its head or body), or drag the 🌿 leaf onto a plant. A popup names the ability.
+- **Shovel:** tap ⛏️ then tap a plant, or drag the shovel onto it.
 - **Power-ups:** tap ⚡ 🖐️ or ❄️ (bottom left), then tap or swipe zombies for 5 seconds.
 - **⏸** pauses the game and gives quick access to Ultimate Mode toggles. **1×/2×** changes the game speed.
 
@@ -122,13 +133,14 @@ npm run build        # multi-file build in dist/ (used by GitHub Pages)
 npm run build:single # one self-contained HTML file in dist-single/
 ```
 
-Tests (`tests/`, 405 tests) run the battle simulation headlessly:
+Tests (`tests/`, 592 tests) run the battle simulation headlessly:
 - `plants.test.ts`: every one of the 100 plants has valid data, a distinct model and a unique behavior.
   It acts on zombies in a real battle, and its Plant Food works.
 - `mechanics1-4.test.ts`: each plant's signature mechanic, one batch of 25 per file, plus power-ups.
 - `battle.test.ts`: core rules (win, lose, mowers, invincibility, sun, recharge).
 - `balance.test.ts`: a scripted player beats every World 1 level *without* Ultimate Mode.
 - `save.test.ts`: Phase 1 → Phase 2 save migration, Ultimate rules and daily rewards.
+- `plantfood.test.ts`: Plant Food audit. Every plant's Plant Food must beat a no-Plant-Food control run (near and far zombies), plus unlimited Plant Food and Pumpkin Shell cases.
 
 ### Project structure
 ```

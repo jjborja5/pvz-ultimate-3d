@@ -5,7 +5,7 @@ import { RIGHT_EDGE } from '../battle';
 import { COLS, LANES } from '../config';
 import { colX, laneZ } from '../environment';
 import { PLANTS } from './roster';
-import type { Behavior, ProjSpec } from './types';
+import type { Behavior, PlantFood, ProjSpec } from './types';
 
 const muzzle = (p: PlantEntity, lane = p.lane, dx = 0.35) => ({ x: p.x + dx, y: p.model.muzzleY, z: laneZ(lane) });
 
@@ -575,10 +575,12 @@ function growUp(b: Battle, p: PlantEntity) {
 
 // ------------------------------------------------------------------ Plant Food
 
-export function applyPlantFood(b: Battle, p: PlantEntity) {
-  const pf = p.def.pf;
+export function applyPlantFood(b: Battle, p: PlantEntity, pf: PlantFood = p.def.pf) {
   const bh = p.def.behavior;
   switch (pf.type) {
+    case 'combo':
+      for (const part of pf.parts) applyPlantFood(b, p, part);
+      break;
     case 'barrage':
       p.pfTime = pf.duration;
       p.s.pfInterval = pf.interval;
@@ -697,8 +699,29 @@ export function onPlantEaten(b: Battle, p: PlantEntity, z: ZombieEntity, _dmg: n
 
 // ------------------------------------------------------------------ animation
 
+let shellGeo: THREE.SphereGeometry | null = null;
+let shellMat: THREE.MeshBasicMaterial | null = null;
+
+/** A shimmering armor bubble shown while a plant has Plant Food armor. */
+function updateShellFx(p: PlantEntity) {
+  const m = p.model as typeof p.model & { shellFx?: THREE.Mesh };
+  if (p.shell > 0) {
+    if (!m.shellFx) {
+      shellGeo ??= new THREE.SphereGeometry(1, 16, 12);
+      shellMat ??= new THREE.MeshBasicMaterial({ color: '#bfe8ff', transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending });
+      m.shellFx = new THREE.Mesh(shellGeo, shellMat);
+      m.root.add(m.shellFx);
+    }
+    const h = Math.max(0.35, m.muzzleY);
+    m.shellFx.position.set(0, h * 0.55, 0);
+    m.shellFx.scale.set(0.42, h * 0.75, 0.42);
+    m.shellFx.visible = true;
+  } else if (m.shellFx) m.shellFx.visible = false;
+}
+
 export function animatePlant(b: Battle, p: PlantEntity, dt: number) {
   const m = p.model;
+  updateShellFx(p);
   const bh = p.def.behavior;
   p.recoil = Math.max(0, p.recoil - dt * 5);
   const sway = Math.sin(p.t * 2.2) * 0.05;

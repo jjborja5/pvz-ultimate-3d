@@ -1120,6 +1120,7 @@ button {
   justify-content: center;
   padding: calc(8px + var(--safe-t)) calc(12px + var(--safe-r)) calc(8px + var(--safe-b)) calc(12px + var(--safe-l));
   animation: fadein 0.2s;
+  z-index: 20;
 }
 @keyframes fadein {
   from {
@@ -1494,4 +1495,282 @@ body.mode-shovel #game {
     height: 40px;
     font-size: 17px;
   }
+}
+
+/* ================= Fullscreen battle HUD (side rails, PvZ2 style) ================= */
+.hud {
+  --rail-gap: clamp(2px, 0.9vh, 5px);
+  --tool: clamp(30px, 11vh, 52px);
+}
+.rail-left {
+  position: absolute;
+  top: calc(4px + var(--safe-t));
+  bottom: calc(4px + var(--safe-b));
+  left: calc(4px + var(--safe-l));
+  width: clamp(58px, 9vw, 78px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--rail-gap);
+  background: linear-gradient(90deg, var(--wood), var(--wood-d));
+  border: 2px solid #3a220c;
+  border-radius: 12px;
+  padding: 3px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+}
+.rail-left .sun-box {
+  width: 100%;
+  height: auto;
+  flex-direction: row;
+  justify-content: center;
+  padding: 2px 0;
+  flex-shrink: 0;
+}
+.rail-left .sun-icon {
+  width: clamp(16px, 5vh, 24px);
+  height: clamp(16px, 5vh, 24px);
+}
+.rail-left .sun-val {
+  min-width: 0;
+  padding: 0 4px;
+  font-size: clamp(11px, 3.6vh, 15px);
+}
+.rail-left .packets {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rail-gap);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  touch-action: pan-y;
+}
+.rail-left .packets::-webkit-scrollbar {
+  display: none;
+}
+.rail-left .packet {
+  width: 100%;
+  height: auto;
+  flex: 1 1 clamp(30px, 9.5vh, 46px);
+  min-height: 22px;
+  max-height: 54px;
+  display: flex;
+  align-items: center;
+  border-radius: 7px;
+  padding: 0 2px;
+}
+.rail-left .packet img {
+  height: 100%;
+  width: auto;
+  aspect-ratio: 1;
+  max-width: 62%;
+}
+.rail-left .packet .cost {
+  position: static;
+  flex: 1;
+  font-size: clamp(10px, 3.2vh, 13px);
+  text-align: right;
+  padding-right: 2px;
+}
+.rail-left .packet.selected {
+  transform: translateX(5px);
+}
+.rail-left .packet .cd {
+  bottom: auto;
+}
+.rail-right {
+  position: absolute;
+  top: calc(4px + var(--safe-t));
+  bottom: calc(4px + var(--safe-b));
+  right: calc(4px + var(--safe-r));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rail-gap);
+  pointer-events: none;
+}
+.rail-right > * {
+  pointer-events: auto;
+}
+.rr-row {
+  display: flex;
+  gap: 4px;
+}
+.rail-right .hud-btn {
+  width: calc(var(--tool) * 0.82);
+  height: calc(var(--tool) * 0.82);
+  font-size: calc(var(--tool) * 0.36);
+  position: relative;
+}
+.ult-dot {
+  position: absolute;
+  top: -5px;
+  right: -3px;
+  font-size: 11px;
+}
+.rail-right .tool-btn {
+  width: var(--tool);
+  height: var(--tool);
+  font-size: calc(var(--tool) * 0.48);
+}
+.rail-right .powers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rail-gap);
+}
+.rail-right .power-btn {
+  width: calc(var(--tool) * 0.8);
+  height: calc(var(--tool) * 0.8);
+  font-size: calc(var(--tool) * 0.34);
+  border-radius: 12px;
+}
+.rail-right .power-btn small {
+  font-size: 8px;
+}
+/* Progress pill sits at the very top, above the fence, never over the lawn. */
+.hud .progress {
+  top: calc(3px + var(--safe-t));
+  bottom: auto;
+  padding: 2px 8px 3px;
+  border-radius: 10px;
+  transform: translateX(-50%) scale(0.86);
+  transform-origin: top center;
+}
+.hud .prog-bar {
+  width: clamp(90px, 18vw, 160px);
+}
+/* Banners: compact, translucent and kept to the top strip so they never hide a lane for long. */
+.hud .banner {
+  top: calc(30px + var(--safe-t));
+  font-size: clamp(16px, 3.2vw, 26px);
+  transform: translate(-50%, 0) scale(0.6);
+}
+.hud .banner.show {
+  transform: translate(-50%, 0) scale(1);
+}
+.hud .banner.ready {
+  top: 40%;
+  font-size: clamp(30px, 7vw, 60px);
+}
+.pf-pop {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  font-family: var(--font);
+  font-size: clamp(13px, 2.4vw, 18px);
+  color: #b8ff8a;
+  -webkit-text-stroke: 1px #0e3a0a;
+  text-shadow: 0 2px 0 #0e3a0a;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: pfpop 1.6s ease-out forwards;
+}
+@keyframes pfpop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -60%) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -110%) scale(1.1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -150%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -170%) scale(1);
+  }
+}
+body.mode-pf .rail-left .packet,
+body.mode-shovel .rail-left .packet {
+  opacity: 0.6;
+}
+
+/* Short landscape screens (Safari toolbars, in-app viewers): compact seed selection. */
+@media (max-height: 380px) {
+  .seed-screen {
+    gap: 3px;
+    padding-top: calc(4px + var(--safe-t));
+  }
+  .seed-head h2 {
+    font-size: 16px;
+  }
+  .seed-head .btn.small {
+    padding: 3px 9px;
+  }
+  .slot {
+    width: 40px;
+    height: 46px;
+  }
+  .slot-row {
+    padding: 3px;
+    gap: 3px;
+  }
+  .seed-grid {
+    grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+    gap: 4px;
+  }
+  .seed-card img {
+    width: 38px;
+    height: 38px;
+  }
+  .sc-name {
+    font-size: 10px;
+  }
+  .chip {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+  .zitem img {
+    width: 28px;
+    height: 28px;
+  }
+  .rock {
+    font-size: 19px;
+    padding: 8px 18px;
+  }
+}
+
+/* install guide + transfer */
+.btn.install {
+  background: linear-gradient(#e8f4ff, #8ac8ff);
+}
+.install .panel {
+  max-width: 560px;
+  align-items: stretch;
+}
+.install-link {
+  font-size: 13px;
+  word-break: break-all;
+  color: #1a5a8a;
+  user-select: text;
+  -webkit-user-select: text;
+  flex: 1;
+  align-self: center;
+}
+.install-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.install .note {
+  font-size: 12px;
+  opacity: 0.75;
+}
+textarea.transfer {
+  width: 100%;
+  font-size: 11px;
+  border-radius: 8px;
+  border: 2px solid #c9a46a;
+  padding: 4px;
+  margin: 6px 0;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: auto;
 }

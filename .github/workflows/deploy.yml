@@ -1,23 +1,23 @@
 name: Deploy to GitHub Pages
 
-# Publishes the game so it can be played on iPhone at https://<user>.github.io/pvz-ultimate-3d/
-# One-time setup: repository Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# Publishes the game to https://jjborja5.github.io/pvz-ultimate-3d/ by building it and pushing the
+# result to the `gh-pages` branch.
+# One-time setup: repository Settings -> Pages -> Build and deployment ->
+#   Source: "Deploy from a branch", Branch: "gh-pages" / "(root)".
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,15 +28,13 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Push dist/ to the gh-pages branch
+        run: |
+          cd dist
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
