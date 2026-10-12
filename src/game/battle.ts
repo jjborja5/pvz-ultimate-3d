@@ -1319,6 +1319,8 @@ export class Battle {
     }
     if (sp.splash) this.splash(pr, z);
     if (sp.chain) this.chainFrom(z, sp.chain, pr.damage * 0.6);
+    if (sp.split) this.splitShards(pr.x, z.lane, pr.damage * 0.6, pr.y);
+    if (sp.look === 'coconut') this.explosionFx(pr.x, pr.z, sp.splash ?? 0.8, '#ff8a2a');
     this.hitFx(pr, z);
     this.sfx(hadArmor ? (z.def.armorMetal || z.shield > 0 ? 'bucket' : 'cone') : pr.fire ? 'fire' : 'hit');
     if (sp.path === 'bounce' && pr.bounces < 3) {
@@ -1358,21 +1360,23 @@ export class Battle {
       pr.hits.add(target.uid);
     }
     if (sp.splash) this.splash(pr, target ?? null);
-    if (sp.split) {
-      const lane = Math.round(pr.z + (LANES - 1) / 2);
-      for (const dl of [-1, 1]) {
-        const l = lane + dl;
-        if (l < 0 || l >= LANES) continue;
-        const t2 = this.firstInLane(l, pr.x - 1.5, 3);
-        if (t2) {
-          this.damageZombie(t2, pr.damage * 0.5, { kind: 'pea' });
-          this.fx.beam(new THREE.Vector3(pr.x, 0.4, pr.z), new THREE.Vector3(t2.x, 0.6, t2.zPos), '#8a5a2b', 0.05, 0.25);
-        }
-      }
-    }
+    if (sp.split) this.splitShards(pr.x, Math.round(pr.z + (LANES - 1) / 2), pr.damage * 0.5, 0.4);
     this.hitFx(pr, target ?? null);
     this.sfx(sp.look === 'melon' || sp.look === 'wmelon' || sp.look === 'bomb' || sp.look === 'coconut' ? 'splat' : 'hit');
     if (sp.look === 'bomb' || sp.look === 'coconut') this.explosionFx(pr.x, pr.z, sp.splash ?? 0.6, '#ff8a2a');
+  }
+
+  /** Shards that ricochet into the nearest zombies in the lanes above and below. */
+  private splitShards(x: number, lane: number, damage: number, y: number) {
+    for (const dl of [-1, 1]) {
+      const l = lane + dl;
+      if (l < 0 || l >= LANES) continue;
+      const t2 = this.firstInLane(l, x - 1.5, 3);
+      if (t2) {
+        this.damageZombie(t2, damage, { kind: 'pea' });
+        this.fx.beam(new THREE.Vector3(x, y, laneZ(lane)), new THREE.Vector3(t2.x, 0.6, t2.zPos), '#ff8aa8', 0.05, 0.25);
+      }
+    }
   }
 
   private splash(pr: Projectile, center: ZombieEntity | null) {

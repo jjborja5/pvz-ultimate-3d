@@ -156,7 +156,7 @@ export type Behavior =
       /** Only shoots flying zombies first if present. */
       antiAir?: boolean;
     }
-  | { type: 'lob'; proj: ProjSpec; interval: number; shots?: number; gap?: number }
+  | { type: 'lob'; proj: ProjSpec; interval: number; shots?: number; gap?: number; furthest?: boolean }
   | { type: 'produce'; amount: number; interval: number; growAfter?: number; grownAmount?: number; count?: number }
   | {
       type: 'wall';
@@ -172,7 +172,7 @@ export type Behavior =
   | { type: 'instant'; fuse: number; effect: Effect }
   | { type: 'mine'; arm: number; trigger: 'contact' | 'eaten'; effect: Effect; reusable?: number }
   | { type: 'melee'; interval: number; damage: number; front: number; back: number; lanes: number; knockback?: number; slow?: number; burn?: number }
-  | { type: 'beam'; kind: 'laser' | 'chain' | 'random' | 'lens' | 'breath'; interval: number; damage: number; chain?: number; range?: number; lanes?: number; sunCost?: number; burn?: number; slow?: number; freeze?: number; strikes?: number }
+  | { type: 'beam'; kind: 'laser' | 'chain' | 'random' | 'lens' | 'breath' | 'snipe'; interval: number; damage: number; chain?: number; range?: number; lanes?: number; sunCost?: number; burn?: number; slow?: number; freeze?: number; strikes?: number }
   | { type: 'grab'; kind: 'devour' | 'squash' | 'drag' | 'transform'; range: number; chew?: number; interval?: number }
   | { type: 'aura'; interval: number; damage: number; radius: number; lanes: number; slow?: number; poison?: number; stun?: number; burn?: number; whenAttacked?: boolean }
   | { type: 'ground'; dps: number; slow?: number; stuck?: number; shock?: boolean; spikes?: boolean }

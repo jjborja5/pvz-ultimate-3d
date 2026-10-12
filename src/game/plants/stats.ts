@@ -21,6 +21,7 @@ function projExtras(p: ProjSpec, out: StatLine[]) {
   if (p.chain) out.push({ label: 'Chains', value: `${p.chain}` });
   if (p.pierce) out.push({ label: 'Pierce', value: p.pierce === Infinity ? 'All' : `${p.pierce}` });
   if (p.air) out.push({ label: 'Anti-air', value: 'Yes' });
+  if (p.split) out.push({ label: 'Ricochets', value: '2 lanes' });
 }
 
 function effectLines(e: Effect, dmg: number, out: StatLine[]) {

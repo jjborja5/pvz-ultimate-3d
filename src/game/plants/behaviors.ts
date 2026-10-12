@@ -130,7 +130,7 @@ export function updatePlant(b: Battle, p: PlantEntity, dt: number) {
         break;
       }
       if (p.timer <= 0) {
-        const t = b.firstInLane(p.lane, p.x, 99, 1, false);
+        const t = b.firstInLane(p.lane, p.x, 99, 1, false, !!bh.furthest);
         if (t) {
           p.timer = bh.interval;
           lobFire(b, p, bh, t);
@@ -381,6 +381,15 @@ function updateBeam(b: Battle, p: PlantEntity, bh: Extract<Behavior, { type: 'be
       b.damageZombie(t, dmg, { kind: 'fire' });
       b.applyStatus(t, { burn: bh.burn });
       b.fx.glowBurst(new THREE.Vector3(t.x, 0.7, t.zPos), '#ffe36a', 0.6);
+      b.sfx('laser');
+      break;
+    }
+    case 'snipe': {
+      const t = b.firstInLane(p.lane, p.x, bh.range ?? 99, 1, false, true);
+      if (!t) return;
+      b.fx.beam(from, new THREE.Vector3(t.x, 0.7, t.zPos), '#ffffff', 0.04, 0.2);
+      b.damageZombie(t, dmg, { kind: 'pea' });
+      b.particles.burst(new THREE.Vector3(t.x, 0.8, t.zPos), { count: 10, colors: ['#ffffff', '#c8ff9a'], speed: 2, up: 0.5, life: 0.3 });
       b.sfx('laser');
       break;
     }
