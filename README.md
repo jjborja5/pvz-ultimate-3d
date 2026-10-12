@@ -6,58 +6,98 @@ tower-defense genre. It is built for **iPhone Safari in landscape** with Three.j
 All models are built in code from simple 3D shapes, all sound and music is synthesized live with the
 Web Audio API, and there are no copied artwork, model, music or sound files.
 
-> **Status: Phase 1.** A complete, playable vertical slice: one world with 5 levels, 7 plants,
-> 5 zombie types (including a boss) and the Ultimate Mode foundation. See the [roadmap](#roadmap) for what's next.
+> **Status: Phase 2.** **100 playable plants**, each with its own 3D character, ability and Plant Food
+> power, 11 zombie types, a 10-level World 1, an endless **Plant Playground** sandbox, plant upgrades,
+> Power-ups, daily rewards and the full Ultimate Mode. Worlds 2–11 are still to come. See the [roadmap](#roadmap).
 
 ---
 
-## ✅ What works (Phase 1)
+## ✅ What works (Phase 2)
 
-**Battlefield & combat**
-- A 3D backyard with a 5-lane × 9-column lawn, a house, a street, a fence, trees, drifting clouds, cel-shaded lighting and real-time shadows.
-- Plants shoot real projectiles that travel down the lane, hit zombies and burst into particles.
-- Zombies walk, eat plants, flash when hit, turn blue when chilled, lose their cone or bucket when it breaks, and lose their heads when they die. Explosions char them.
-- One lawn mower per lane is your last line of defense. If a zombie gets past it, you lose.
-- Sun falls from the sky, and Sunflowers make more. **Tap or swipe** over sun to collect it.
-- Waves get harder. Huge waves are announced with a banner and a siren, and the last one is the **FINAL WAVE**. A progress meter shows flags for the huge waves.
-- **Win** by defeating every wave and tapping the trophy. **Lose** if a zombie reaches the house.
-- Plant Food: some zombies glow green and drop it. Each plant has its own power-up.
-- Shovel to dig up plants, a 1×/2× speed toggle, and a pause menu.
+### 🌱 100 plants, all playable
+Every plant has a unique 3D model, its own ability, health, sun cost, recharge time, upgrade stats (levels 1–10),
+a Plant Food super ability, an almanac entry and a working seed packet. Each one is placed in a real battle in
+the automated tests and has to prove that its signature mechanic works.
 
-**Plants (7):** Peashooter, Sunflower, Wall-nut (cracks as it gets damaged), Potato Mine (arms, then explodes), Cherry Bomb (3×3 blast), Snow Pea (slows), Repeater (fires two peas).
+| Family | Plants |
+|---|---|
+| 🟢 Pod Squad (13) | Peashooter, Repeater, Tri-Pea, Peek-a-Pea, Gatling Pod, Star Sprout, Seeker Thistle, Needle Cactus, Boomerose, Rock Pea, Roto Turnip, Sniper Pea, Ricochet Radish |
+| ☀️ Sunshine (8) | Sunflower, Double Bloom, Golden Bud, Ancient Sunflower, Moon Blossom, Sun-mint, Sun Bean, Lucky Clover |
+| 🛡️ Bulwark (9) | Wall-nut, Tower Nut, Hex Nut, Spiky Durian, Leaf Guard, Pumpkin Shell, Boulder Nut, Pea-nut, Stink Onion |
+| 💥 Kaboom (9) | Potato Mine, Cherry Bomb, Boom Nut, Grapeburst, Stone Mine, Pomegrenade, Firecracker Fig, Coconut Cannon, Doom Cap |
+| 🔥 Blaze (8) | Ember Pea, Blaze Pepper, Flame Dragon, Magma Guava, Torch Vine, Sun Lens, Chili Bean, Pepper Pult |
+| ❄️ Frost (6) | Snow Pea, Frost Melon, Frostbite Lettuce, Frost Dragon, Frost Bloom, Frost Cap |
+| ⚡ Voltage (7) | Beam Bean, Zap Reed, Storm Berry, Plasma Citrus, Shock Currant, Volt Tea, Volt Pea |
+| 🥬 Lobbers (5) | Butter Cob, Melon Mortar, Cabbage Lobber, Headbutt Lettuce, Pinecone Pitcher |
+| 🌙 Mystic (10) | Hypno Cap, Hex Hazel, Shade Pea, Shadow Lobber, Nightbloom, Grim Rose, Veil-mint, Mind Flower, Shrink Violet, Toxic Ivy |
+| 🥊 Brawlers (7) | Punch Choy, Snapjaw, Squashling, Thornmat, Wasabi Lash, Poke Okra, Bulb Bowler |
+| 🍄 Spores (6) | Sunspore, Puffcap, Fumecap, Gloomcap, Goo Pea, Magnet Cap |
+| 🌬️ Gust (8) | Garlunk, Gale Kale, Fan Clover, Sticky Sap, Tangle Vine, Gust Fern, Time Thyme, Dandelion Drifter |
+| 💚 Support (4) | Vigor Lily, Seed Sower, Healing Hibiscus, Drum Daisy |
 
-**Zombies (5):** Shambler, Banner (flag), Conehead, Buckethead, and the **Mega Brute** boss (smashes plants with a log club).
+Gameplay roles include straight, three-lane, backward, five-way, diagonal and homing shooters, lobbers that arc
+over shields, splash, burn, chill, freeze, poison, stun, knockback and weaken effects, chain lightning, lane
+lasers, sun-powered beams, sniping, melee brawlers, devouring, squashing, transforming zombies into plants,
+hypnosis, shrinking, wind and lane-diverting, walls with thorns, regeneration, knockback, explosions or stun,
+overlay armor (Pumpkin Shell), sun and Plant Food producers, healers, attack-speed and damage auras, fire
+conversion (Torch Vine), ground hazards, lava pools and craters.
 
-**Campaign & menus**
-- Title screen with an animated 3D backyard.
-- World map with all 11 planned worlds. **World 1 "Sunrise Meadow" is playable with 5 levels**, and its final level is a boss level. The other worlds are clearly marked "coming in a future update".
-- Seed selection before each level, with a preview of the level's zombies standing on the street.
-- An Almanac for plants and zombies, with 3D-rendered portraits, stats, upgrade stars and descriptions.
-- A Settings screen: music, sound effects, graphics quality, auto-collect sun, how to play, and reset progress.
-- Arena, Survival and Sandbox appear on the title screen as "Coming soon". They are **not built yet**.
+Names, designs and models are original. They are inspired by the *roles* of PvZ2 plants (for example, Tri-Pea is
+the three-lane role and Snapjaw is the devourer role); no artwork was copied.
 
-**👑 Ultimate Mode** is on by default. It is saved automatically, and you can toggle each perk from the Ultimate screen or from the in-battle pause menu:
+### 🎨 New character art system
+- Every character is sculpted in code from organic shapes: lathed bodies, curved tube stems, bent leaves and
+  petals, gradients, and big expressive eyes with highlights, lids and brows, plus mouths and cheeks.
+- Cartoon ink outlines (can be switched off in Settings for extra speed).
+- Idle sway, blinking, attack recoil, lobbing arms, punches, chomping jaws, growing, swelling before
+  explosions, burrowing mines and a Plant Food glow.
+- Each character is one skinned mesh with bones, so a detailed plant or zombie costs only 1–2 draw calls.
+  Characters use soft contact shadows, and the scenery shadow map is rendered once. Together these halve
+  the triangle count, which helps on iPhone.
+
+### 🧟 Zombies (11)
+Shambler, Banner, Conehead, Buckethead, **Pole Jumper** (vaults over plants unless they're tall walls),
+**Scrappy Imp** (fast), **Balloon** (flies over plants; needs anti-air, wind or explosions), **Screen Door** (its shield blocks
+straight shots; lobbers fly over it), **Iron Knight** (metal armor), **Newsreader** (enrages when the paper
+breaks) and the **Mega Brute** boss (smash-proof plants survive it).
+
+### 🎮 Modes & meta
+- **Adventure:** World 1 *Sunrise Meadow* now has 10 levels with new zombies and a boss finale. Each level
+  suggests a featured plant.
+- **Plant Playground:** an endless sandbox with 10 seed slots and growing waves, for testing all 100 plants.
+- **Plant Collection:** filter by 13 plant families, read the stats, and upgrade plants with coins and seed
+  packets. Upgrades are free with Ultimate Mode.
+- **Power-ups:** Power Zap, Power Toss and Power Snow. Tap or swipe zombies for 5 seconds. They cost 500 coins
+  each, or are free with Ultimate Mode.
+- **Daily rewards:** a 7-day streak of coins, seed packets and gems.
+- Zombie almanac with counter tips.
+- Arena, Survival and Mini-games appear on the title screen as "Coming soon". They are **not built yet**.
+
+### 👑 Ultimate Unlimited Edition
+Every perk can be switched on or off individually, from the Ultimate screen or from the in-battle pause menu,
+and the settings are saved automatically.
 
 | Perk | Status |
 |---|---|
-| 💎 Unlimited Gems / 🪙 Coins / 🌰 Seed Packets / ♾️ Rewards | ✅ The balances show ∞. Gems, coins and seed packets are earned and saved, but nothing spends them yet because the shop is planned for a later phase. |
-| ☀️ Unlimited Sunlight | ✅ Plant anything, any time |
+| 💎 Unlimited Gems / 🪙 Coins / 🌰 Seed Packets / 🎁 Rewards | ✅ The balances show ∞, and upgrades and power-ups are free |
+| ☀️ Unlimited Sunlight | ✅ |
 | 🌱 Unlimited Plant Food | ✅ |
-| 🔓 All plants unlocked | ✅ Always. All implemented content is available immediately. |
-| ⭐ Maximum plant upgrades | ✅ All plants at level 5 (+100% damage and health, faster recharge, more sun) |
-| ➕ Two additional seed slots | ✅ 8 slots instead of 6 |
-| ⚡ Instant recharge (optional) | ✅ |
-| 👑 Invincibility (optional) | ✅ Plants take no damage, and a shield protects the house |
+| 🔓 All implemented plants unlocked | ✅ Always (all 100) |
+| ⭐ Maximum plant levels | ✅ Every plant at level 10 |
+| ➕ Two extra seed slots | ✅ 8 slots (the sandbox always has 10) |
+| ⚡ Instant recharge | ✅ Optional |
+| 🛡️ Plant invincibility | ✅ Optional |
+| 💥 Maximum damage | ✅ Optional (plants hit 100× harder) |
 
-**Saving:** progress, currencies, your last plant loadout, Ultimate Mode perks and settings are saved automatically in the browser's local storage.
-
-**Mobile:** landscape layout with a "rotate your iPhone" prompt in portrait. It respects the notch and safe areas, blocks pinch and double-tap zoom, can be added to the Home Screen as a full-screen app, caps the pixel ratio for performance, merges the static scenery into a handful of draw calls, and has a Low graphics option.
+### 💾 Saves
+Progress, currencies, upgrades, loadout, Ultimate settings and the daily streak are saved automatically.
+Phase 1 saves are migrated: levels you beat are mapped to the new level numbers, and nothing is lost.
 
 ## 📱 How to play on your iPhone
 
 **Play from GitHub Pages (a permanent link that works once the PR is merged)**
 1. In Safari, open the repository on github.com → **Settings** → **Pages** → under *Build and deployment* set **Source = GitHub Actions** (one-time).
-2. Merge the Phase 1 pull request. The *Deploy to GitHub Pages* workflow publishes the game to
+2. Merge the pull request(s) into `main`. The *Deploy to GitHub Pages* workflow publishes the game to
    `https://jjborja5.github.io/pvz-ultimate-3d/` (the Actions tab shows progress).
 3. Open that link in Safari, turn the phone sideways and play.
 4. Optional: tap **Share → Add to Home Screen** to get a full-screen app icon with no Safari bars.
@@ -69,6 +109,7 @@ Web Audio API, and there are no copied artwork, model, music or sound files.
 - **Collect sun:** tap it, or swipe your finger across it.
 - **Plant Food:** tap 🌿, then tap a plant.
 - **Shovel:** tap ⛏️, then tap a plant.
+- **Power-ups:** tap ⚡ 🖐️ or ❄️ (bottom left), then tap or swipe zombies for 5 seconds.
 - **⏸** pauses the game and gives quick access to Ultimate Mode toggles. **1×/2×** changes the game speed.
 
 ## 🛠 Development
@@ -81,9 +122,13 @@ npm run build        # multi-file build in dist/ (used by GitHub Pages)
 npm run build:single # one self-contained HTML file in dist-single/
 ```
 
-Tests (`tests/`) run the battle simulation headlessly:
-- core rules: winning, losing, mowers, invincibility, sun costs, recharge, plant food, cherry bomb area
-- a **balance test** where a scripted player beats every level *without* Ultimate Mode
+Tests (`tests/`, 405 tests) run the battle simulation headlessly:
+- `plants.test.ts`: every one of the 100 plants has valid data, a distinct model and a unique behavior.
+  It acts on zombies in a real battle, and its Plant Food works.
+- `mechanics1-4.test.ts`: each plant's signature mechanic, one batch of 25 per file, plus power-ups.
+- `battle.test.ts`: core rules (win, lose, mowers, invincibility, sun, recharge).
+- `balance.test.ts`: a scripted player beats every World 1 level *without* Ultimate Mode.
+- `save.test.ts`: Phase 1 → Phase 2 save migration, Ultimate rules and daily rewards.
 
 ### Project structure
 ```
@@ -92,9 +137,12 @@ src/
   app.ts               renderer, render loop, save, screen navigation
   styles.css           all UI styling (mobile landscape first)
   game/
-    config.ts          data: plants, zombies, worlds, levels, upgrade multipliers
+    config.ts          data: zombies, worlds, levels, upgrade costs/multipliers
     battle.ts          the battle simulation (no DOM, unit-testable)
-    models.ts          procedural cel-shaded 3D models
+    plants/            plant types, batch1-4 data (100 plants), behavior interpreter, stats
+    models/            rig kit (skinned meshes, faces, outlines), plant/zombie/prop builders
+    fx.ts              beams, lightning, glows, pools, craters, wind
+    daily.ts           daily reward streak
     environment.ts     backyard scene, lighting, static-mesh merging
     particles.ts       instanced particle system + shockwaves
     audio.ts           synthesized sound effects and music
@@ -113,11 +161,12 @@ Adding content is mostly data: a new level is a list of waves in `config.ts`, an
 ## 🗺 Roadmap
 
 Planned, **not yet implemented**:
-- **Phase 2:** more plants (e.g. lobbers, area attackers and support plants) and more zombies, plus more levels for World 1. A shop and upgrade screen will spend coins, gems and seed packets.
-- **Phase 3+:** the remaining 10 themed worlds, each with its own environment, mechanics, zombies and boss.
-- Arena, Survival (endless) and Sandbox modes.
-- Star challenges per level, more boss battles, Zen-garden style extras.
-- Better audio, more animations and more particle polish.
+- **Worlds 2–11**, each with its own environment, special mechanics (for example sand tiles, planks and
+  cannons, mine carts, power tiles, gravestones, water lanes, frozen tiles, gold tiles, music events, dino
+  helpers), world-specific zombies and a boss.
+- Arena, Survival challenge series, mini-games and special challenge levels.
+- Star challenges for each level and more advanced wave scripting.
+- Pushing the collection past 100 plants, plus more zombie types.
 
 ---
 *Unofficial fan project for personal use. Not affiliated with or endorsed by any game publisher. All art and sound are original and generated in code.*
