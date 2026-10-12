@@ -5,7 +5,7 @@ import { audio } from '../game/audio';
 import { Battle, type BattleEvent, type Pickup } from '../game/battle';
 import { COLS, LANES, PLANTS, getLevel, nextLevelId, type LevelDef, type PlantId, type ZombieId } from '../game/config';
 import { BOARD_RIGHT, buildEnvironment, colX, laneZ, type Environment } from '../game/environment';
-import { rules } from '../game/save';
+import { rules, type Rules } from '../game/save';
 import { clear, h } from '../ui/dom';
 import { pauseMenu, resultsScreen, seedSelectScreen } from '../ui/screens';
 import { plantThumb } from '../ui/thumbs';
@@ -14,7 +14,7 @@ type Mode = 'none' | 'seed' | 'shovel' | 'plantfood';
 
 export class BattleView implements View {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(36, 16 / 9, 0.1, 100);
+  readonly camera = new THREE.PerspectiveCamera(18, 16 / 9, 0.5, 160);
   readonly level: LevelDef;
   battle!: Battle;
   private env: Environment;
@@ -44,6 +44,8 @@ export class BattleView implements View {
   private progressFill!: HTMLElement;
   private progressHead!: HTMLElement;
   private bannerEl!: HTMLElement;
+  private progNameEl!: HTMLElement;
+  private lastWave = -1;
   private lastSun = -1;
   private lastPf = -1;
   private loadout: PlantId[] = [];
@@ -75,6 +77,18 @@ export class BattleView implements View {
     this.listen(window, 'pointercancel', () => this.cancelDrag());
   }
 
+  private get sandbox() {
+    return this.levelId === 'sandbox';
+  }
+
+  private rules(): Rules {
+    return rules(this.app.save, { sandbox: this.sandbox });
+  }
+
+  private makeBattle(loadout: PlantId[]) {
+    return new Battle(this.scene, this.level, loadout, this.rules(), { autoCollectSun: this.app.save.settings.autoCollectSun, endless: this.sandbox });
+  }
+
   private listen(t: EventTarget, type: string, fn: EventListener) {
     t.addEventListener(type, fn);
     this.listeners.push([t, type, fn]);
@@ -82,9 +96,9 @@ export class BattleView implements View {
 
   private newBattle(loadout: PlantId[]) {
     if (this.battle) this.battle.dispose();
-    const r = rules(this.app.save);
+    const r = this.rules();
     this.loadout = loadout.slice(0, r.seedSlots);
-    this.battle = new Battle(this.scene, this.level, this.loadout, r, { autoCollectSun: this.app.save.settings.autoCollectSun });
+    this.battle = this.makeBattle(this.loadout);
     this.spawnPreview();
   }
 
@@ -102,7 +116,7 @@ export class BattleView implements View {
     this.stage = 'select';
     this.focusGoal = 4.2;
     clear(this.app.ui);
-    this.overlay = seedSelectScreen(this.app, this.level, (loadout) => this.beginBattle(loadout), () => this.quit());
+    this.overlay = seedSelectScreen(this.app, this.level, this.rules().seedSlots, (loadout) => this.beginBattle(loadout), () => this.quit());
     this.app.ui.append(this.overlay);
   }
 
@@ -110,10 +124,9 @@ export class BattleView implements View {
     this.app.save.lastLoadout = loadout;
     this.app.persist();
     this.loadout = loadout;
-    this.battle.rules = rules(this.app.save);
     // Rebuild battle with the chosen loadout (cooldowns depend on it), keep the lineup for the camera pan.
     this.battle.dispose();
-    this.battle = new Battle(this.scene, this.level, loadout, rules(this.app.save), { autoCollectSun: this.app.save.settings.autoCollectSun });
+    this.battle = this.makeBattle(loadout);
     this.spawnPreview();
     clear(this.app.ui);
     this.overlay = null;
@@ -150,18 +163,18 @@ export class BattleView implements View {
     this.paused = false;
     this.overlay?.remove();
     this.overlay = null;
-    this.battle.rules = rules(this.app.save);
+    this.battle.rules = this.rules();
     this.refreshPackets();
   }
 
   /** Re-apply Ultimate settings changed from the pause menu. */
   applyRules() {
-    this.battle.rules = rules(this.app.save);
+    this.battle.rules = this.rules();
     this.battle.autoCollect = this.app.save.settings.autoCollectSun;
   }
 
   private quit() {
-    this.app.showScreen('map');
+    this.app.showScreen(this.sandbox ? 'title' : 'map');
   }
 
   private onEnd(result: 'won' | 'lost') {
@@ -170,6 +183,7 @@ export class BattleView implements View {
     const save = this.app.save;
     let gems = 0;
     let coins = 0;
+    let packets = 0;
     if (result === 'won') {
       const first = !save.completed[this.levelId];
       save.completed[this.levelId] = (save.completed[this.levelId] ?? 0) + 1;
@@ -177,7 +191,8 @@ export class BattleView implements View {
       gems = first ? 5 : 0;
       save.coins += coins;
       save.gems += gems;
-      save.seedPackets += 3;
+      packets = 10 + this.level.index * 2;
+      save.seedPackets += packets;
       this.app.persist();
     }
     setTimeout(() => {
@@ -189,6 +204,7 @@ export class BattleView implements View {
         stats: this.battle.stats,
         coins,
         gems,
+        packets,
         next: next ? () => this.app.startLevel(next) : undefined,
         retry: () => this.app.startLevel(this.levelId),
         map: () => this.quit(),
@@ -247,7 +263,8 @@ export class BattleView implements View {
       if (w.flag) bar.append(h('div', { class: 'prog-flag', text: '🚩', style: { left: `${((i + 1) / this.level.waves.length) * 100}%` } }));
     });
     bar.append(this.progressHead);
-    const progress = h('div', { class: 'progress' }, h('div', { class: 'prog-name', text: `Level ${this.level.id}` }), bar);
+    this.progNameEl = h('div', { class: 'prog-name', text: this.sandbox ? 'Wave 1' : `Level ${this.level.id}` });
+    const progress = h('div', { class: 'progress' }, this.progNameEl, bar);
 
     this.bannerEl = h('div', { class: 'banner' });
     this.hud = h('div', { class: 'hud' }, seedbar, topRight, tools, progress, this.bannerEl);
@@ -284,6 +301,10 @@ export class BattleView implements View {
       this.pfEl.classList.toggle('empty', pf <= 0);
     }
     this.refreshPackets();
+    if (this.sandbox && b.endlessWave !== this.lastWave) {
+      this.lastWave = b.endlessWave;
+      this.progNameEl.textContent = `🧪 Wave ${Math.max(1, b.endlessWave)}`;
+    }
     const p = b.progress;
     this.progressFill.style.width = `${p * 100}%`;
     this.progressHead.style.left = `${p * 100}%`;
@@ -483,11 +504,11 @@ export class BattleView implements View {
     // Fit the battlefield (house edge to street) to the screen width.
     const vfov = THREE.MathUtils.degToRad(this.camera.fov);
     const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.aspect);
-    const halfW = 7.6;
-    const dist = Math.max(halfW / Math.tan(hfov / 2), 8.5);
-    const pitch = THREE.MathUtils.degToRad(52);
+    const halfW = 7.1;
+    const dist = Math.max(halfW / Math.tan(hfov / 2), 16);
+    const pitch = THREE.MathUtils.degToRad(44);
     const dir = new THREE.Vector3(0, Math.sin(pitch), Math.cos(pitch));
-    const target = new THREE.Vector3(0.5 + this.focusX, 0, -0.3);
+    const target = new THREE.Vector3(0.55 + this.focusX, 0, -0.15);
     this.camera.position.copy(target).addScaledVector(dir, dist);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 0.8);

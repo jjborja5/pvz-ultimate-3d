@@ -21,17 +21,23 @@ export class MenuView implements View {
     this.env = buildEnvironment(highQuality);
     this.scene.add(this.env.group);
     const layout: [PlantId, number, number][] = [
-      ['sunflower', 0, 1],
-      ['peashooter', 1, 1],
-      ['wallnut', 3, 1],
+      ['sunflower', 0, 0],
+      ['tripea', 1, 0],
+      ['emberpea', 2, 1],
+      ['doublebloom', 0, 1],
+      ['melonmortar', 1, 1],
+      ['towernut', 4, 1],
       ['sunflower', 0, 2],
-      ['repeater', 1, 2],
-      ['potatomine', 4, 2],
-      ['sunflower', 0, 3],
-      ['snowpea', 1, 3],
-      ['wallnut', 3, 3],
-      ['cherrybomb', 2, 0],
-      ['peashooter', 2, 4],
+      ['gatlingpod', 1, 2],
+      ['flamedragon', 2, 2],
+      ['spikydurian', 4, 2],
+      ['ancientflower', 0, 3],
+      ['snapjaw', 3, 3],
+      ['frostmelon', 1, 3],
+      ['punchchoy', 4, 3],
+      ['peashooter', 1, 4],
+      ['hypnocap', 3, 4],
+      ['cherrybomb', 2, 4],
     ];
     for (const [id, col, lane] of layout) {
       const m = buildPlant(id);
@@ -43,13 +49,15 @@ export class MenuView implements View {
     const zs: [ZombieId, number, number][] = [
       ['basic', 6.2, 1],
       ['cone', 7.0, 2],
-      ['bucket', 6.6, 3],
-      ['flag', 7.6, 0],
+      ['knight', 6.6, 3],
+      ['balloon', 7.4, 0],
+      ['door', 7.8, 1],
       ['brute', 8.6, 4],
+      ['imp', 6.0, 4],
     ];
     for (const [id, col, lane] of zs) {
       const m = buildZombie(ZOMBIES[id]);
-      m.root.position.set(colX(col), 0.03, laneZ(lane));
+      m.root.position.set(colX(col), id === 'balloon' ? 1.2 : 0.03, laneZ(lane));
       this.scene.add(m.root);
       this.zombies.push(m);
     }

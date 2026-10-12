@@ -36,7 +36,7 @@ export function staticMesh(key: string, build: (r: Rig) => void, outline = true)
   }
   if (!staticMat) staticMat = characterMaterial();
   const mesh = new THREE.Mesh(g, staticMat);
-  mesh.castShadow = true;
+  mesh.castShadow = false;
   if (!outline || !outlineSettings.enabled) return mesh;
   const group = new THREE.Group();
   group.add(mesh);

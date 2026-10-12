@@ -109,3 +109,43 @@ export function zombieThumb(id: ZombieId): string {
   }
   return url;
 }
+
+// ------------------------------------------------------------------ progressive loading
+
+const queue: { id: string; zombie: boolean; img: HTMLImageElement }[] = [];
+let pumping = false;
+
+function pump() {
+  if (pumping) return;
+  pumping = true;
+  const step = () => {
+    const t0 = performance.now();
+    // Render a few portraits per frame so big grids appear without freezing the UI.
+    while (queue.length && performance.now() - t0 < 12) {
+      const job = queue.shift()!;
+      if (!job.img.isConnected && queue.length > 40) continue;
+      job.img.src = job.zombie ? zombieThumb(job.id as ZombieId) : plantThumb(job.id);
+      job.img.classList.remove('loading');
+    }
+    if (queue.length) requestAnimationFrame(step);
+    else pumping = false;
+  };
+  requestAnimationFrame(step);
+}
+
+/** An <img> that shows the portrait immediately if cached, otherwise fills in shortly after. */
+export function thumbImg(id: string, alt: string, zombie = false, cls = ''): HTMLImageElement {
+  const img = document.createElement('img');
+  img.alt = alt;
+  img.draggable = false;
+  if (cls) img.className = cls;
+  const cached = zombie ? zombieThumbs.get(id as ZombieId) : plantThumbs.get(id);
+  if (cached !== undefined) img.src = cached;
+  else {
+    img.classList.add('loading');
+    img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+    queue.push({ id, zombie, img });
+    pump();
+  }
+  return img;
+}

@@ -1147,7 +1147,7 @@ export class Battle {
     this.particles.ring(at, color, 1.6 + radius, 0.5);
     this.particles.ring(at, '#fff2a0', 0.8 + radius * 0.6, 0.3);
     this.particles.burst(at, { count: 50, colors: [color, '#ffb02a', '#ffe36a', '#ffffff'], speed: 4 + radius, up: 2.5, size: 0.08, life: 0.7 });
-    this.particles.burst(at, { count: 20, colors: ['#555555', '#777777', '#3a3a3a'], speed: 1.5, up: 1.5, size: 0.14, life: 1.2, gravity: -0.5, grow: 2 });
+    this.particles.burst(at, { count: 12, colors: ['#9a9088', '#b8b0a8', '#7a7470'], speed: 1.4, up: 1.6, size: 0.07, life: 0.8, gravity: -0.6, grow: 1.4 });
     this.fx.glowBurst(at, color, 1 + radius);
     this.sfx('explode');
     this.shake(0.2 + radius * 0.05);
@@ -1665,6 +1665,8 @@ export class Battle {
     const t = z.animT;
     const flying = this.isFlying(z);
     m.root.position.y = flying ? 1.2 + Math.sin(t * 2) * 0.08 : z.vaultT >= 0 ? Math.sin((z.vaultT / 0.8) * Math.PI) * 1.1 : 0.03;
+    // Keep the contact shadow on the ground while airborne.
+    m.inst.blob.position.y = (0.035 - m.root.position.y) / Math.max(0.01, m.root.scale.y);
     if (flying) {
       m.legL.rotation.z = 0.2 + Math.sin(t * 3) * 0.2;
       m.legR.rotation.z = -0.1 - Math.sin(t * 3) * 0.2;

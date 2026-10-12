@@ -65,12 +65,16 @@ function unit(key: string, make: () => THREE.BufferGeometry) {
   return g;
 }
 
+/** Segment budget: characters are small on a phone screen, so keep curved pieces light. */
+const LOD = 0.72;
+const segs = (n: number, min = 5) => Math.max(min, Math.round(n * LOD));
+
 export const geo = {
-  sphere: (seg = 16) => unit('s' + seg, () => new THREE.SphereGeometry(1, seg, Math.max(6, Math.round(seg * 0.75)))),
-  hemi: () => unit('hemi', () => new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)),
-  cyl: (seg = 12) => unit('c' + seg, () => new THREE.CylinderGeometry(1, 1, 1, seg)),
-  cone: (seg = 12) => unit('k' + seg, () => new THREE.ConeGeometry(1, 1, seg)),
-  torus: (arc = Math.PI * 2, tube = 0.25) => unit(`t${arc.toFixed(2)}:${tube}`, () => new THREE.TorusGeometry(1, tube, 8, 18, arc)),
+  sphere: (seg = 16) => unit('s' + seg, () => new THREE.SphereGeometry(1, segs(seg, 6), segs(Math.max(6, Math.round(seg * 0.75)), 4))),
+  hemi: () => unit('hemi', () => new THREE.SphereGeometry(1, segs(16), segs(8, 4), 0, Math.PI * 2, 0, Math.PI / 2)),
+  cyl: (seg = 12) => unit('c' + seg, () => new THREE.CylinderGeometry(1, 1, 1, segs(seg))),
+  cone: (seg = 12) => unit('k' + seg, () => new THREE.ConeGeometry(1, 1, segs(seg, 4))),
+  torus: (arc = Math.PI * 2, tube = 0.25) => unit(`t${arc.toFixed(2)}:${tube}`, () => new THREE.TorusGeometry(1, tube, 6, segs(18), arc)),
   box: () => unit('b', () => new THREE.BoxGeometry(1, 1, 1)),
   rbox: (r = 0.18) => unit('rb' + r, () => new RoundedBoxGeometry(1, 1, 1, 2, r)),
   capsule: (ratio = 1) => unit('cap' + ratio, () => new THREE.CapsuleGeometry(0.5, ratio, 6, 12)),
@@ -88,13 +92,13 @@ export const geo = {
         area += x1 * y2 - x2 * y1;
       }
       const ordered = area < 0 ? [...pts].reverse() : pts;
-      return new THREE.LatheGeometry(ordered.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+      return new THREE.LatheGeometry(ordered.map(([r, y]) => new THREE.Vector2(r, y)), segs(seg, 6));
     }),
   /** Smooth curved tube through points. */
   tube: (key: string, pts: V3[], radius: number, taper = 1, seg = 10) =>
     unit('tb:' + key, () => {
       const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
-      const g = new THREE.TubeGeometry(curve, seg, radius, 7, false);
+      const g = new THREE.TubeGeometry(curve, seg, radius, 6, false);
       if (taper !== 1) {
         // Taper radius toward the end of the tube.
         const pos = g.attributes.position as THREE.BufferAttribute;
@@ -118,7 +122,7 @@ export const geo = {
    */
   leaf: (curl = 0.3, cup = 0.15, tip = 1) =>
     unit(`leaf:${curl}:${cup}:${tip}`, () => {
-      const g = new THREE.SphereGeometry(1, 14, 10);
+      const g = new THREE.SphereGeometry(1, 10, 8);
       const pos = g.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < pos.count; i++) {
         let x = pos.getX(i);
@@ -322,6 +326,7 @@ export class Rig {
 
 export interface CharacterInstance {
   root: THREE.Group;
+  blob: THREE.Mesh;
   mesh: THREE.SkinnedMesh;
   outline: THREE.SkinnedMesh | null;
   material: THREE.MeshToonMaterial;
@@ -341,7 +346,35 @@ export function cachedTemplate(key: string, make: () => RigTemplate): RigTemplat
 }
 
 /** Create an animated instance of a template (bones are new; geometry is shared). */
-export function instantiate(t: RigTemplate, shadows = true): CharacterInstance {
+let blobGeo: THREE.PlaneGeometry | null = null;
+let blobMat: THREE.MeshBasicMaterial | null = null;
+/** Soft round contact shadow under a character (much cheaper than shadow-mapping skinned meshes). */
+export function blobShadow(radius: number): THREE.Mesh {
+  if (!blobGeo) {
+    blobGeo = new THREE.PlaneGeometry(1, 1);
+    blobGeo.rotateX(-Math.PI / 2);
+    const n = 64;
+    const data = new Uint8Array(n * n * 4);
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        const d = Math.hypot(x - n / 2 + 0.5, y - n / 2 + 0.5) / (n / 2);
+        const a = Math.max(0, 1 - d) ** 1.6;
+        data.set([20, 30, 15, Math.round(a * 150)], (y * n + x) * 4);
+      }
+    const tex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    blobMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  }
+  const m = new THREE.Mesh(blobGeo, blobMat!);
+  m.scale.set(radius * 2, 1, radius * 2);
+  m.position.y = 0.035;
+  m.renderOrder = -1;
+  return m;
+}
+
+export function instantiate(t: RigTemplate, shadows = false): CharacterInstance {
   const bones: Record<string, THREE.Bone> = {};
   const list: THREE.Bone[] = [];
   for (const b of t.bones) {
@@ -360,6 +393,9 @@ export function instantiate(t: RigTemplate, shadows = true): CharacterInstance {
   mesh.frustumCulled = false;
   const root = new THREE.Group();
   root.add(mesh);
+  const bb = t.geometry.boundingBox!;
+  const blob = blobShadow(Math.min(0.42, Math.max(0.22, Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * 0.45)));
+  root.add(blob);
   root.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton(list);
   mesh.bind(skeleton);
@@ -370,7 +406,7 @@ export function instantiate(t: RigTemplate, shadows = true): CharacterInstance {
     outline.bind(skeleton, mesh.bindMatrix);
     root.add(outline);
   }
-  return { root, mesh, outline, material, bones, template: t };
+  return { root, blob, mesh, outline, material, bones, template: t };
 }
 
 export function disposeInstance(c: CharacterInstance) {

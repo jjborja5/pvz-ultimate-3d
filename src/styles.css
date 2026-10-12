@@ -1195,3 +1195,260 @@ body.mode-shovel #game {
     height: 52px;
   }
 }
+
+/* ================= Phase 2 additions ================= */
+.scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.btn.sandbox {
+  background: linear-gradient(#b8e8ff, #4ab0e8);
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  border-color: #1a5a8a;
+  box-shadow: 0 4px 0 #1a5a8a, 0 6px 12px rgba(0, 0, 0, 0.25);
+}
+.btn.gift {
+  background: linear-gradient(#ffd0e8, #ff7ab8);
+}
+.btn.pulse {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* family chips */
+.chips {
+  display: flex;
+  gap: 5px;
+  padding-bottom: 3px;
+  flex-shrink: 0;
+}
+.chip {
+  flex-shrink: 0;
+  border: 2px solid var(--wood-d);
+  background: var(--cream);
+  color: var(--ink);
+  border-radius: 14px;
+  padding: 3px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.chip.active {
+  background: var(--chip, #3fae3a);
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* level badge */
+.lvl {
+  display: inline-block;
+  font-family: var(--font);
+  font-size: 10px;
+  background: #5a3a1a;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 15px;
+}
+.lvl.max {
+  background: linear-gradient(#ffe36a, #ffb31f);
+  color: var(--ink);
+}
+
+/* collection */
+.alm-chips {
+  flex-shrink: 0;
+}
+.alm-card {
+  position: relative;
+  gap: 1px;
+}
+.alm-card .lvl {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+.alm-card span {
+  line-height: 1.1;
+  text-align: center;
+}
+.alm-detail {
+  flex-direction: column;
+  gap: 6px;
+}
+.alm-hero {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.alm-big {
+  width: 112px;
+  height: 112px;
+}
+.alm-title h3 {
+  margin: 0;
+  font-family: var(--font);
+  font-weight: normal;
+  font-size: 22px;
+}
+.fam {
+  display: inline-block;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 1px 8px;
+  font-size: 12px;
+  margin: 3px 0;
+}
+.lvlrow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.alm-detail p {
+  margin: 0;
+  font-size: 13px;
+}
+.ability {
+  font-weight: 600;
+}
+.blurb {
+  font-style: italic;
+  opacity: 0.75;
+}
+.upgrade {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(63, 174, 58, 0.12);
+  border: 2px dashed #8ac86a;
+  border-radius: 12px;
+  padding: 6px 8px;
+}
+.upgrade .next {
+  flex: 1;
+  min-width: 140px;
+  font-size: 11px;
+}
+
+/* map grid */
+.level-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  padding: 2px;
+}
+.level-grid .level-node {
+  min-width: 0;
+  padding: 6px 4px;
+}
+.level-grid .ln-num {
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+}
+.level-grid .ln-name {
+  font-size: 13px;
+}
+
+/* seed select */
+.seed-panel {
+  gap: 4px;
+  overflow: hidden;
+}
+.seed-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.seed-chips {
+  flex-shrink: 0;
+}
+.slot-row {
+  max-width: 100%;
+  flex-shrink: 0;
+}
+.slot {
+  flex-shrink: 0;
+}
+.sc-lvl {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-family: var(--font);
+  font-size: 9px;
+  background: #5a3a1a;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0 4px;
+}
+.seed-card.featured {
+  border-color: #ffb31f;
+  box-shadow: 0 0 0 2px #ffe36a;
+}
+.tip {
+  background: rgba(43, 26, 14, 0.75);
+  color: #ffe36a;
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.zombie-panel .zlist {
+  flex: 1;
+  min-height: 0;
+}
+
+/* daily rewards */
+.daily-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+.daily-day {
+  background: #fff;
+  border: 2px solid #c9a46a;
+  border-radius: 10px;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 10px;
+  min-width: 0;
+}
+.daily-day b {
+  font-size: 22px;
+  font-weight: normal;
+}
+.daily-day.done {
+  background: #d8f8c8;
+  opacity: 0.7;
+}
+.daily-day.next {
+  border-color: #ffb31f;
+  box-shadow: 0 0 0 3px #ffe36a;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* HUD packets scale down when many seed slots are used */
+@media (max-width: 760px) {
+  .packet {
+    width: 40px;
+    height: 54px;
+  }
+  .sun-box {
+    width: 46px;
+    height: 54px;
+  }
+  .level-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

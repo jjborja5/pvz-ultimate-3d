@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { audio } from './game/audio';
 import { loadSave, writeSave, type SaveData } from './game/save';
 import { initThumbnails } from './ui/thumbs';
+import { outlineSettings } from './game/models/kit';
 import { clear } from './ui/dom';
 import * as screens from './ui/screens';
 import { MenuView } from './views/menuView';
@@ -59,9 +60,13 @@ export class App {
 
   applyQuality() {
     const hq = this.save.settings.highQuality;
+    outlineSettings.enabled = this.save.settings.outlines;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, hq ? 2 : 1.25));
     this.renderer.shadowMap.enabled = hq;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Only the static scenery casts map shadows (characters use blob shadows), so render it once.
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     this.resize();
   }
 
@@ -97,6 +102,7 @@ export class App {
   private setView(v: View) {
     if (this.view && this.view !== this.menuView) this.view.dispose();
     this.view = v;
+    this.renderer.shadowMap.needsUpdate = true;
     this.resize();
   }
 
@@ -104,6 +110,7 @@ export class App {
   private useMenuView() {
     if (!this.menuView) this.menuView = new MenuView(this.save.settings.highQuality);
     if (this.view !== this.menuView) this.setView(this.menuView);
+    this.renderer.shadowMap.needsUpdate = true;
     audio.playMusic('menu');
   }
 
