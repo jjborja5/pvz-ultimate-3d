@@ -453,6 +453,35 @@ export class Battle {
     return true;
   }
 
+  /** Power-ups (finger powers): zap, toss or freeze the touched zombie. */
+  powerUp(kind: 'zap' | 'toss' | 'snow', z: ZombieEntity) {
+    if (z.dying >= 0 || z.hypno || this.phase !== 'playing') return false;
+    const at = new THREE.Vector3(z.x, 0.8, z.zPos);
+    if (kind === 'zap') {
+      this.fx.lightning(new THREE.Vector3(z.x, 6, z.zPos), at, '#bfe8ff');
+      this.fx.glowBurst(at, '#bfe8ff', 0.8);
+      if (this.isFlying(z)) this.popBalloon(z);
+      this.damageZombie(z, 500, { kind: 'volt' });
+      this.chainFrom(z, 2, 200);
+      this.sfx('zap');
+    } else if (kind === 'toss') {
+      if (z.def.boss) this.damageZombie(z, 800, { kind: 'melee' });
+      else this.blowAway(z);
+      this.particles.burst(at, { count: 16, colors: ['#ffffff', '#ffe36a'], speed: 3, up: 2 });
+      this.sfx('wind');
+    } else {
+      for (const o of this.inArea(z.x, z.lane, 1.2, 1)) {
+        this.applyStatus(o, { freeze: 8, slow: 14 });
+        this.damageZombie(o, 60, { kind: 'ice' });
+      }
+      this.particles.burst(at, { count: 30, colors: ['#dff6ff', '#9fdcff', '#ffffff'], speed: 2.5, up: 1.5, size: 0.06 });
+      this.particles.ring(at, '#bfefff', 2.2, 0.5);
+      this.sfx('freeze');
+    }
+    this.shake(0.12);
+    return true;
+  }
+
   // ================================================================ simulation
 
   update(dt: number) {

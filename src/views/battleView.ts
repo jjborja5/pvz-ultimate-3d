@@ -10,7 +10,10 @@ import { clear, h } from '../ui/dom';
 import { pauseMenu, resultsScreen, seedSelectScreen } from '../ui/screens';
 import { plantThumb } from '../ui/thumbs';
 
-type Mode = 'none' | 'seed' | 'shovel' | 'plantfood';
+type Mode = 'none' | 'seed' | 'shovel' | 'plantfood' | 'power';
+type Power = 'zap' | 'toss' | 'snow';
+const POWER_COST = 500;
+const POWER_TIME = 5;
 
 export class BattleView implements View {
   readonly scene = new THREE.Scene();
@@ -22,6 +25,10 @@ export class BattleView implements View {
   private paused = false;
   speed = 1;
   private mode: Mode = 'none';
+  private power: Power | null = null;
+  private powerUntil = 0;
+  private powerHits = new Map<number, number>();
+  private powerEls = new Map<Power, HTMLElement>();
   private selected: PlantId | null = null;
   private dragging = false;
   private dragMoved = false;
@@ -255,6 +262,18 @@ export class BattleView implements View {
     this.shovelEl = h('button', { class: 'tool-btn shovel', text: '⛏️', attrs: { 'aria-label': 'Shovel' } });
     this.shovelEl.addEventListener('click', () => this.setMode(this.mode === 'shovel' ? 'none' : 'shovel'));
     const tools = h('div', { class: 'hud-br' }, this.pfEl, this.shovelEl);
+    const free = this.battle.rules.unlimitedCurrency;
+    const powers = h('div', { class: 'hud-bl' });
+    for (const [kind, icon, label] of [
+      ['zap', '⚡', 'Power Zap'],
+      ['toss', '🖐️', 'Power Toss'],
+      ['snow', '❄️', 'Power Snow'],
+    ] as [Power, string, string][]) {
+      const el = h('button', { class: 'power-btn', attrs: { 'aria-label': label } }, h('span', { text: icon }), h('small', { text: free ? '∞' : `🪙${POWER_COST}` }));
+      el.addEventListener('click', () => this.activatePower(kind));
+      this.powerEls.set(kind, el);
+      powers.append(el);
+    }
 
     this.progressFill = h('div', { class: 'prog-fill' });
     this.progressHead = h('div', { class: 'prog-head', text: '🧟' });
@@ -267,7 +286,7 @@ export class BattleView implements View {
     const progress = h('div', { class: 'progress' }, this.progNameEl, bar);
 
     this.bannerEl = h('div', { class: 'banner' });
-    this.hud = h('div', { class: 'hud' }, seedbar, topRight, tools, progress, this.bannerEl);
+    this.hud = h('div', { class: 'hud' }, seedbar, topRight, tools, powers, progress, this.bannerEl);
     this.app.ui.append(this.hud);
     this.lastSun = -1;
     this.lastPf = -1;
@@ -318,7 +337,59 @@ export class BattleView implements View {
     (this.bannerEl as unknown as { _t: number })._t = window.setTimeout(() => (this.bannerEl.className = 'banner'), ms);
   }
 
+  private activatePower(kind: Power) {
+    if (this.stage !== 'play' || this.paused) return;
+    if (this.mode === 'power' && this.power === kind) {
+      this.setMode('none');
+      return;
+    }
+    const save = this.app.save;
+    if (!this.battle.rules.unlimitedCurrency) {
+      if (save.coins < POWER_COST) {
+        audio.play('error');
+        this.banner(`Power-ups cost ${POWER_COST} coins`, 'info', 1600);
+        return;
+      }
+      save.coins -= POWER_COST;
+      this.app.persist();
+    }
+    this.setMode('power');
+    this.power = kind;
+    this.powerUntil = this.battle.time + POWER_TIME;
+    this.powerHits.clear();
+    for (const [k, el] of this.powerEls) el.classList.toggle('active', k === kind);
+    audio.play('pfuse');
+    this.banner(kind === 'zap' ? 'Tap or swipe zombies to zap them!' : kind === 'toss' ? 'Tap zombies to fling them away!' : 'Tap zombies to freeze them!', 'info', 1500);
+  }
+
+  /** Apply the active power-up to the zombie under a screen point. */
+  private powerAt(x: number, y: number, swipe: boolean) {
+    if (this.mode !== 'power' || !this.power) return false;
+    if (swipe && this.power === 'toss') return false;
+    let best = null as null | (typeof this.battle.zombies)[number];
+    let bd = 70;
+    for (const z of this.battle.zombies) {
+      if (z.dying >= 0 || z.hypno) continue;
+      const s = this.toScreen(new THREE.Vector3(z.x, (this.battle.isFlying(z) ? 1.8 : 0.7) * z.def.scale, z.zPos));
+      const d = Math.hypot(s.x - x, s.y - y);
+      if (d < bd) {
+        bd = d;
+        best = z;
+      }
+    }
+    if (!best) return false;
+    const last = this.powerHits.get(best.uid) ?? -9;
+    if (this.battle.time - last < 0.35) return true;
+    this.powerHits.set(best.uid, this.battle.time);
+    this.battle.powerUp(this.power, best);
+    return true;
+  }
+
   private setMode(mode: Mode, plant: PlantId | null = null) {
+    if (mode !== 'power') {
+      this.power = null;
+      for (const el of this.powerEls.values()) el.classList.remove('active');
+    }
     this.mode = mode;
     this.selected = mode === 'seed' ? plant : null;
     this.pfEl?.classList.toggle('active', mode === 'plantfood');
@@ -409,6 +480,10 @@ export class BattleView implements View {
   private onCanvasDown(e: PointerEvent) {
     if (this.stage !== 'play' || this.paused) return;
     this.pointerDown = true;
+    if (this.mode === 'power') {
+      this.powerAt(e.clientX, e.clientY, false);
+      return;
+    }
     if (this.tryCollect(e.clientX, e.clientY)) return;
     const tile = this.pickTile(e.clientX, e.clientY);
     if (!tile) {
@@ -436,6 +511,8 @@ export class BattleView implements View {
         this.highlight.position.set(colX(tile.col), 0.05, laneZ(tile.lane));
         (this.highlight.material as THREE.MeshBasicMaterial).color.set(this.battle.plantAtTile(tile.col, tile.lane) ? '#ff5050' : '#ffffff');
       } else this.highlight.visible = false;
+    } else if (this.pointerDown && this.mode === 'power') {
+      this.powerAt(e.clientX, e.clientY, true);
     } else if (this.pointerDown) {
       // Swipe over sun to collect it.
       this.tryCollect(e.clientX, e.clientY);
@@ -496,6 +573,7 @@ export class BattleView implements View {
     const events = this.battle.events.splice(0);
     for (const ev of events) this.handleEvent(ev);
     if (this.stage !== 'select') this.updateHud();
+    if (this.mode === 'power' && this.battle.time > this.powerUntil) this.setMode('none');
     this.updateCamera(dt);
   }
 

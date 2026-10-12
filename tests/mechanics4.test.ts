@@ -237,3 +237,23 @@ describe('batch 4 signature mechanics', () => {
     expect(w.hp).toBeGreaterThan(1000);
   });
 });
+
+describe('power-ups', () => {
+  it('Power Zap damages and chains, Power Toss flings, Power Snow freezes an area', () => {
+    const b = arena();
+    const a = b.spawnZombie('basic', 2, 1);
+    const c = b.spawnZombie('basic', 2, 1.6);
+    a.hp = c.hp = 3000;
+    expect(b.powerUp('zap', a)).toBe(true);
+    expect(a.hp).toBeLessThan(3000);
+    expect(c.hp).toBeLessThan(3000);
+    const t = b.spawnZombie('bucket', 1, 2);
+    b.powerUp('toss', t);
+    expect(t.dying).toBeGreaterThanOrEqual(0);
+    const f1 = b.spawnZombie('cone', 3, 0);
+    const f2 = b.spawnZombie('cone', 4, 0.5);
+    b.powerUp('snow', f1);
+    expect(f1.freeze).toBeGreaterThan(0);
+    expect(f2.freeze).toBeGreaterThan(0);
+  });
+});
