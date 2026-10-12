@@ -316,14 +316,23 @@ function settingsPanel(app: App, inBattle = false) {
 }
 
 export function settingsScreen(app: App) {
+  // Two-tap confirmation (native confirm() dialogs are blocked in some embedded browsers).
+  let armed = false;
   const reset = btn(
     '🗑 Reset Progress',
     () => {
-      if (confirm('Erase all progress and settings?')) {
-        app.save = defaultSave();
-        app.persist();
-        app.showScreen('title');
+      if (!armed) {
+        armed = true;
+        reset.textContent = '⚠️ Tap again to erase everything';
+        setTimeout(() => {
+          armed = false;
+          reset.textContent = '🗑 Reset Progress';
+        }, 3000);
+        return;
       }
+      app.save = defaultSave();
+      app.persist();
+      app.showScreen('title');
     },
     'danger small',
   );
