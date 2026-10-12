@@ -149,6 +149,7 @@ export interface Projectile {
   lob: { fx: number; fz: number; tx: number; tz: number; t: number; dur: number; h: number; y0: number } | null;
   returning: boolean;
   bounces: number;
+  bounceTo: number | null;
   fire: boolean;
   converted: Set<number>;
 }
@@ -816,6 +817,7 @@ export class Battle {
       lob: null,
       returning: false,
       bounces: 0,
+      bounceTo: null,
       fire: spec.look === 'fire',
       converted: new Set(),
     };
@@ -1110,6 +1112,11 @@ export class Battle {
         this.fx.screenTint('#9fffc8', 0.5);
         this.sfx('heal');
         break;
+      case 'hypnoArea': {
+        for (const z of this.inArea(x, lane, e.radius, e.lanes, false)) this.hypnotize(z);
+        this.particles.ring(new THREE.Vector3(x, 0.5, z0), '#e07aff', 2.5, 0.5);
+        break;
+      }
       case 'transformArea': {
         const id = 'puffcap';
         for (const z of this.inArea(x, lane, e.radius, e.lanes)) {
@@ -1228,6 +1235,12 @@ export class Battle {
       }
       pr.x += pr.vx * dt;
       pr.z += pr.vz * dt;
+      if (pr.bounceTo !== null && pr.vz !== 0 && (pr.vz > 0 ? pr.z >= pr.bounceTo : pr.z <= pr.bounceTo)) {
+        // Finished hopping to the next lane: roll straight again.
+        pr.z = pr.bounceTo;
+        pr.vx = Math.hypot(pr.vx, pr.vz);
+        pr.vz = 0;
+      }
       pr.traveled += Math.hypot(pr.vx, pr.vz) * dt;
       pr.mesh.position.set(pr.x, pr.y, pr.z);
       if (sp.look === 'star' || sp.look === 'boomerang' || sp.look === 'thistle' || sp.look === 'bulb' || sp.look === 'spike') pr.mesh.rotation.y += dt * 12;
@@ -1312,10 +1325,12 @@ export class Battle {
       pr.bounces++;
       pr.hits.clear();
       pr.hits.add(z.uid);
-      const dir = pr.z <= -1.5 ? 1 : pr.z >= 1.5 ? -1 : pr.vz !== 0 ? Math.sign(pr.vz) : this.rng() < 0.5 ? -1 : 1;
+      const lane = Math.round(pr.z + (LANES - 1) / 2);
+      const dir = lane <= 0 ? 1 : lane >= LANES - 1 ? -1 : pr.bounceTo !== null && pr.bounceTo < pr.z - 0.01 ? -1 : pr.bounceTo !== null ? 1 : this.rng() < 0.5 ? -1 : 1;
       const speed = Math.hypot(pr.vx, pr.vz);
-      pr.vz = dir * speed * 0.7;
-      pr.vx = speed * 0.7;
+      pr.bounceTo = laneZ(lane + dir);
+      pr.vz = dir * speed * 0.8;
+      pr.vx = speed * 0.6;
       return;
     }
     const pierce = sp.pierce ?? 0;
@@ -1336,6 +1351,7 @@ export class Battle {
           freeze: sp.freeze,
           burn: sp.burn,
           poison: sp.poison,
+          weaken: sp.weaken,
           knockback: sp.knockback,
           stun: sp.stun && (sp.stunChance === undefined || this.rng() < sp.stunChance) ? sp.stun : undefined,
         });

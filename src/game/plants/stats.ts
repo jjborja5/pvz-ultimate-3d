@@ -47,6 +47,30 @@ function effectLines(e: Effect, dmg: number, out: StatLine[]) {
     case 'givePlantFood':
       out.push({ label: 'Plant Food', value: `+${e.amount}` });
       break;
+    case 'boostProducers':
+      out.push({ label: 'Effect', value: 'All sun producers fire' });
+      break;
+    case 'conceal':
+      out.push({ label: 'Hide plants', value: `${e.duration}s` });
+      break;
+    case 'shrink':
+      out.push({ label: 'Shrink area', value: `${e.lanes * 2 + 1} lanes × ${r(e.radius * 2)} tiles` });
+      break;
+    case 'blowLane':
+      out.push({ label: 'Push back', value: `${e.distance} tiles` }, { label: 'Chill', value: `${e.chill}s` });
+      break;
+    case 'blowAll':
+      out.push({ label: 'Push back', value: `${e.distance} tile${e.distance === 1 ? '' : 's'}` }, { label: 'Flying zombies', value: 'Blown away' });
+      break;
+    case 'globalSlow':
+      out.push({ label: 'Slow all', value: `${e.duration}s` });
+      break;
+    case 'hypnoEater':
+      out.push({ label: 'Effect', value: 'Hypnotizes eater' });
+      break;
+    case 'sunEater':
+      out.push({ label: 'Sun', value: `${e.amount * 2}` });
+      break;
     case 'stunEater':
       out.push({ label: 'Stun', value: `${e.duration}s` });
       break;

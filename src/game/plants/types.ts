@@ -126,7 +126,8 @@ export type Effect =
   | { type: 'summonAlly'; zombie: 'basic' | 'cone' | 'bucket' | 'brute' | 'knight' }
   | { type: 'laneStrike'; damage: number; color: string }
   | { type: 'healAll'; amount: number }
-  | { type: 'transformArea'; radius: number; lanes: number };
+  | { type: 'transformArea'; radius: number; lanes: number }
+  | { type: 'hypnoArea'; radius: number; lanes: number };
 
 export type Behavior =
   | {
@@ -174,7 +175,7 @@ export type Behavior =
   | { type: 'beam'; kind: 'laser' | 'chain' | 'random' | 'lens' | 'breath'; interval: number; damage: number; chain?: number; range?: number; lanes?: number; sunCost?: number; burn?: number; slow?: number; freeze?: number; strikes?: number }
   | { type: 'grab'; kind: 'devour' | 'squash' | 'drag' | 'transform'; range: number; chew?: number; interval?: number }
   | { type: 'aura'; interval: number; damage: number; radius: number; lanes: number; slow?: number; poison?: number; stun?: number; burn?: number; whenAttacked?: boolean }
-  | { type: 'ground'; dps: number; slow?: number; stuck?: number; shock?: number; spikes?: boolean }
+  | { type: 'ground'; dps: number; slow?: number; stuck?: number; shock?: boolean; spikes?: boolean }
   | { type: 'overlay' }
   | {
       type: 'support';

@@ -190,6 +190,22 @@ describe('every plant works in battle', () => {
         else expect(b.plantFood).toBe(1);
         return;
       }
+      if (bh.type === 'instant' && bh.effect.type === 'boostProducers') {
+        b.spawnPlant('sunflower', 0, 0);
+        b.spawnPlant(def.id, 2, LANE);
+        run(b, 2);
+        expect(b.pickups.some((k) => k.kind === 'sun')).toBe(true);
+        return;
+      }
+      if (bh.type === 'instant' && bh.effect.type === 'conceal') {
+        const w = b.spawnPlant('wallnut', 2, LANE);
+        b.spawnPlant(def.id, 5, 0);
+        const z = b.spawnZombie('basic', LANE, -1.4);
+        run(b, 4);
+        expect(w.hp).toBe(w.maxHp);
+        expect(z.x).toBeLessThan(w.x);
+        return;
+      }
       if (bh.type === 'mine' && bh.trigger === 'eaten') {
         const p = b.spawnPlant(def.id, 2, LANE);
         const z = b.spawnZombie('basic', LANE, -1.6);
@@ -203,13 +219,14 @@ describe('every plant works in battle', () => {
       }
       const { p, z } = engage(b, def);
       const hp0 = z.hp;
+      const x0 = z.x;
       if (bh.type === 'mine' && bh.arm > 0) {
         p.armed = true;
         p.timer = 0;
         p.model.body.position.y = 0;
       }
       if (bh.type === 'support' && (bh.kind === 'globalSlow' || bh.kind === 'wind' || bh.kind === 'hypnoAura')) p.timer = 0.1;
-      const ok = run(b, 14, () => affected(z, hp0) || (((bh.type === 'support' && bh.kind === 'wind') || bh.type === 'wall') && z.x > -1.1));
+      const ok = run(b, 14, () => affected(z, hp0) || z.x > x0 + 0.4 || (((bh.type === 'support' && bh.kind === 'wind') || bh.type === 'wall') && z.x > -1.1));
       if (bh.type === 'wall') {
         // wall with an active twist (thorns / knockback / shooting / stun)
         expect(ok || z.x > -1.2).toBe(true);
