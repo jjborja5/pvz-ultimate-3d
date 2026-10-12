@@ -102,10 +102,10 @@ export interface ProjSpec {
 }
 
 export type Effect =
-  | { type: 'blast'; radius: number; lanes: number; damage: number; fire?: boolean; crater?: number; color?: string }
-  | { type: 'laneFire'; damage: number }
+  | { type: 'blast'; radius: number; lanes: number; damage: number; fire?: boolean; crater?: number; color?: string; dx?: number }
+  | { type: 'laneFire'; damage: number; lanes?: number }
   | { type: 'freezeAll'; duration: number; damage: number }
-  | { type: 'freezeArea'; radius: number; lanes: number; duration: number; damage: number }
+  | { type: 'freezeArea'; radius: number; lanes: number; duration: number; damage: number; dx?: number }
   | { type: 'shrink'; radius: number; lanes: number }
   | { type: 'blowAll'; distance: number }
   | { type: 'blowLane'; distance: number; chill: number }
@@ -124,10 +124,15 @@ export type Effect =
   | { type: 'strikeAll'; damage: number }
   | { type: 'laser'; lanes: number; damage: number }
   | { type: 'summonAlly'; zombie: 'basic' | 'cone' | 'bucket' | 'brute' | 'knight' }
-  | { type: 'laneStrike'; damage: number; color: string }
+  | { type: 'laneStrike'; damage: number; color: string; lanes?: number; burn?: number }
   | { type: 'healAll'; amount: number }
-  | { type: 'transformArea'; radius: number; lanes: number }
-  | { type: 'hypnoArea'; radius: number; lanes: number };
+  | { type: 'transformArea'; radius: number; lanes: number; count?: number }
+  | { type: 'hypnoArea'; radius: number; lanes: number; count?: number }
+  | { type: 'magnetAll'; damage: number }
+  | { type: 'rootLanes'; lanes: number; duration: number; damage: number }
+  | { type: 'poisonLanes'; lanes: number; dps: number; damage: number }
+  | { type: 'chainStorm'; hops: number; damage: number }
+  | { type: 'laneSmash'; count: number; damage: number };
 
 export type Behavior =
   | {
@@ -193,6 +198,7 @@ export type PlantFood =
   | { type: 'effect'; effect: Effect }
   | { type: 'arm'; copies?: number }
   | { type: 'boost'; duration: number; factor: number }
+  | { type: 'combo'; parts: PlantFood[] }
   | { type: 'none' };
 
 export interface PlantDef {

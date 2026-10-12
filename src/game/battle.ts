@@ -238,7 +238,7 @@ export class Battle {
   endless: boolean;
   endlessWave = 0;
 
-  stats = { killed: 0, planted: 0, sunCollected: 0, coins: 0, plantFoodUsed: 0 };
+  stats = { killed: 0, planted: 0, sunCollected: 0, coins: 0, plantFoodUsed: 0, shots: 0 };
 
   readonly rng: () => number;
   autoCollect: boolean;
@@ -829,6 +829,7 @@ export class Battle {
   /** Fire a projectile from a point in direction (dx, dz). */
   shoot(from: { x: number; y: number; z: number }, spec: ProjSpec, dx = 1, dz = 0, damage = spec.damage, target: ZombieEntity | null = null): Projectile {
     const mesh = projectileMesh(spec.look, spec.scale ?? 1);
+    this.stats.shots++;
     mesh.position.set(from.x, from.y, from.z);
     this.root.add(mesh);
     const len = Math.hypot(dx, dz) || 1;
@@ -984,8 +985,10 @@ export class Battle {
     const dm = (d: number) => (src ? this.damageOf(src, d) : d);
     switch (e.type) {
       case 'blast': {
-        for (const z of this.inArea(x, lane, e.radius, e.lanes)) this.damageZombie(z, dm(e.damage), { kind: e.fire ? 'fire' : 'blast' });
-        this.explosionFx(x, z0, e.radius, e.color ?? (e.fire ? '#ff5a2a' : '#ffb02a'));
+        const bx = x + (e.dx ?? 0);
+        for (const z of this.inArea(bx, lane, e.radius, e.lanes)) this.damageZombie(z, dm(e.damage), { kind: e.fire ? 'fire' : 'blast' });
+        this.explosionFx(bx, z0, e.radius, e.color ?? (e.fire ? '#ff5a2a' : '#ffb02a'));
+        if (e.lanes > 0) for (const dl of [-1, 1]) if (lane + dl >= 0 && lane + dl < LANES) this.particles.ring(new THREE.Vector3(bx, 0.4, laneZ(lane + dl)), e.color ?? '#ffb02a', 1.4 + e.radius, 0.45);
         if (e.crater) {
           const col = Math.round(x + (COLS - 1) / 2);
           if (col >= 0 && col < COLS) this.hazards[lane][col].crater = e.crater;
@@ -994,9 +997,12 @@ export class Battle {
         break;
       }
       case 'laneFire': {
-        for (const z of this.zombies) if (z.dying < 0 && !z.hypno && z.lane === lane && z.x < RIGHT_EDGE + 0.5) this.damageZombie(z, dm(e.damage), { kind: 'fire' });
-        for (let c = 0; c < COLS; c++) this.particles.burst(new THREE.Vector3(colX(c), 0.3, z0), { count: 10, colors: ['#ff5a1f', '#ffb02a', '#ffe36a'], speed: 1.8, up: 3, size: 0.09, life: 0.8, gravity: -1 });
-        this.fx.laneFlash(z0, '#ff7a1f');
+        const span = e.lanes ?? 0;
+        for (const z of this.zombies) if (z.dying < 0 && !z.hypno && Math.abs(z.lane - lane) <= span && z.x < RIGHT_EDGE + 0.5) this.damageZombie(z, dm(e.damage), { kind: 'fire' });
+        for (let l = Math.max(0, lane - span); l <= Math.min(LANES - 1, lane + span); l++) {
+          for (let c = 0; c < COLS; c++) this.particles.burst(new THREE.Vector3(colX(c), 0.3, laneZ(l)), { count: 8, colors: ['#ff5a1f', '#ffb02a', '#ffe36a'], speed: 1.8, up: 3, size: 0.09, life: 0.8, gravity: -1 });
+          this.fx.laneFlash(laneZ(l), '#ff7a1f');
+        }
         this.sfx('fire');
         this.shake(0.18);
         break;
@@ -1011,12 +1017,14 @@ export class Battle {
         break;
       }
       case 'freezeArea': {
-        for (const z of this.inArea(x, lane, e.radius, e.lanes)) {
+        const fx0 = x + (e.dx ?? 0);
+        for (const z of this.inArea(fx0, lane, e.radius, e.lanes)) {
           if (e.damage) this.damageZombie(z, dm(e.damage), { kind: 'ice' });
           this.applyStatus(z, { freeze: e.duration, slow: e.duration + 5 });
         }
-        this.particles.burst(new THREE.Vector3(x, 0.4, z0), { count: 30, colors: ['#dff6ff', '#9fdcff', '#ffffff'], speed: 2.5, up: 1.5, size: 0.06 });
-        this.particles.ring(new THREE.Vector3(x, 0.3, z0), '#bfefff', 1.2 + e.radius, 0.5);
+        if (e.dx) for (let k = 0; k < 6; k++) this.particles.burst(new THREE.Vector3(x + (k / 5) * e.dx * 2, 0.4, z0), { count: 8, colors: ['#dff6ff', '#9fdcff', '#ffffff'], speed: 1.5, up: 1.2, size: 0.06, spread: (e.lanes + 0.5) * 1.6 });
+        this.particles.burst(new THREE.Vector3(fx0, 0.4, z0), { count: 30, colors: ['#dff6ff', '#9fdcff', '#ffffff'], speed: 2.5, up: 1.5, size: 0.06 });
+        this.particles.ring(new THREE.Vector3(fx0, 0.3, z0), '#bfefff', 1.2 + e.radius, 0.5);
         this.sfx('freeze');
         break;
       }
@@ -1080,8 +1088,7 @@ export class Battle {
         if (src) for (let i = 0; i < Math.ceil(e.amount / 75); i++) this.produceSun(src, Math.min(75, e.amount - i * 75), i);
         break;
       case 'givePlantFood':
-        this.addPlantFood(e.amount);
-        if (src) this.spawnPickup('plantfood', 1, new THREE.Vector3(src.x, 0.9, src.z), false).collected = false;
+        for (let i = 0; i < e.amount; i++) this.spawnPickup('plantfood', 1, new THREE.Vector3(x, 0.9, z0), false);
         break;
       case 'boostProducers':
         for (const p of this.plants) {
@@ -1128,9 +1135,17 @@ export class Battle {
         this.spawnAlly(e.zombie, lane, x + 0.3);
         break;
       case 'laneStrike': {
-        for (const z of this.zombies) if (z.dying < 0 && !z.hypno && z.lane === lane && z.x < RIGHT_EDGE + 0.5 && !this.isFlying(z)) this.damageZombie(z, dm(e.damage), { kind: 'melee' });
-        for (let c = 0; c < COLS; c++) this.particles.burst(new THREE.Vector3(colX(c), 0.1, z0), { count: 6, colors: [e.color, '#ffffff'], speed: 1.2, up: 3.5, size: 0.06, life: 0.5 });
-        this.fx.laneFlash(z0, e.color);
+        const span = e.lanes ?? 0;
+        for (const z of this.zombies) {
+          if (z.dying < 0 && !z.hypno && Math.abs(z.lane - lane) <= span && z.x > x - 0.5 && z.x < RIGHT_EDGE + 0.5 && !this.isFlying(z)) {
+            this.damageZombie(z, dm(e.damage), { kind: e.burn ? 'fire' : 'melee' });
+            if (e.burn) this.applyStatus(z, { burn: e.burn });
+          }
+        }
+        for (let l = Math.max(0, lane - span); l <= Math.min(LANES - 1, lane + span); l++) {
+          for (let c = 0; c < COLS; c++) if (colX(c) > x - 0.5) this.particles.burst(new THREE.Vector3(colX(c), 0.1, laneZ(l)), { count: 6, colors: [e.color, '#ffffff'], speed: 1.2, up: 3.5, size: 0.06, life: 0.5 });
+          this.fx.laneFlash(laneZ(l), e.color);
+        }
         this.sfx('punch');
         this.shake(0.12);
         break;
@@ -1145,13 +1160,25 @@ export class Battle {
         this.sfx('heal');
         break;
       case 'hypnoArea': {
-        for (const z of this.inArea(x, lane, e.radius, e.lanes, false)) this.hypnotize(z);
+        const targets = this.inArea(x, lane, e.radius, e.lanes, false)
+          .filter((z) => !z.def.boss)
+          .sort((a, b) => Math.hypot(a.x - x, a.zPos - z0) - Math.hypot(b.x - x, b.zPos - z0))
+          .slice(0, e.count ?? 99);
+        for (const z of targets) {
+          this.hypnotize(z);
+          this.fx.beam(new THREE.Vector3(x, 0.8, z0), new THREE.Vector3(z.x, 1.1, z.zPos), '#e07aff', 0.07, 0.5);
+        }
         this.particles.ring(new THREE.Vector3(x, 0.5, z0), '#e07aff', 2.5, 0.5);
+        this.sfx('magic');
         break;
       }
       case 'transformArea': {
         const id = 'puffcap';
-        for (const z of this.inArea(x, lane, e.radius, e.lanes)) {
+        const pool = this.inArea(x, lane, e.radius, e.lanes)
+          .sort((a, b) => Math.hypot(a.x - x, a.zPos - z0) - Math.hypot(b.x - x, b.zPos - z0))
+          .slice(0, e.count ?? 99);
+        for (const z of pool) {
+          this.fx.beam(new THREE.Vector3(x, 0.8, z0), new THREE.Vector3(z.x, 0.9, z.zPos), '#e07aff', 0.06, 0.5);
           if (z.def.boss) {
             this.damageZombie(z, dm(500), { kind: 'magic' });
             continue;
@@ -1163,6 +1190,82 @@ export class Battle {
         }
         this.particles.ring(new THREE.Vector3(x, 0.5, z0), '#e07aff', 2 + e.radius, 0.5);
         this.sfx('magic');
+        break;
+      }
+      case 'magnetAll': {
+        for (const z of this.enemies()) {
+          let pulled = false;
+          if (z.shield > 0) {
+            z.shield = 0;
+            if (z.model.shield) z.model.shield.visible = false;
+            pulled = true;
+          }
+          if (z.armor > 0 && z.def.armorMetal) {
+            z.armor = 0;
+            if (z.model.armor) z.model.armor.visible = false;
+            pulled = true;
+          }
+          if (pulled) this.fx.beam(new THREE.Vector3(x, 0.9, z0), new THREE.Vector3(z.x, 1.2, z.zPos), '#ff5a5a', 0.06, 0.5);
+          if (e.damage) this.damageZombie(z, dm(e.damage), { kind: 'volt' });
+        }
+        this.particles.ring(new THREE.Vector3(x, 0.6, z0), '#ff5a5a', 3, 0.5);
+        this.sfx('zap');
+        break;
+      }
+      case 'rootLanes': {
+        for (const z of this.zombies) {
+          if (z.dying >= 0 || z.hypno || Math.abs(z.lane - lane) > e.lanes || z.x < x - 0.5 || z.x > RIGHT_EDGE + 0.5 || this.isFlying(z)) continue;
+          this.applyStatus(z, { stun: e.duration });
+          if (e.damage) this.damageZombie(z, dm(e.damage), { kind: 'melee' });
+          this.particles.burst(new THREE.Vector3(z.x, 0.1, z.zPos), { count: 10, colors: ['#3a8a2a', '#7ac85a'], speed: 1, up: 2.5, size: 0.06 });
+        }
+        for (let l = Math.max(0, lane - e.lanes); l <= Math.min(LANES - 1, lane + e.lanes); l++) this.fx.laneFlash(laneZ(l), '#5aaa3a');
+        this.sfx('splat');
+        break;
+      }
+      case 'poisonLanes': {
+        for (const z of this.zombies) {
+          if (z.dying >= 0 || z.hypno || Math.abs(z.lane - lane) > e.lanes || z.x < x - 0.5 || z.x > RIGHT_EDGE + 0.5) continue;
+          this.applyStatus(z, { poison: e.dps });
+          if (e.damage) this.damageZombie(z, dm(e.damage), { kind: 'poison', ignoreArmor: true });
+        }
+        for (let l = Math.max(0, lane - e.lanes); l <= Math.min(LANES - 1, lane + e.lanes); l++) {
+          for (let c = 0; c < COLS; c++) if (colX(c) > x - 0.5) this.particles.burst(new THREE.Vector3(colX(c), 0.5, laneZ(l)), { count: 5, colors: ['#a6ff3a', '#7a4a9a', '#c8ff9a'], speed: 0.8, up: 0.8, size: 0.09, life: 1, gravity: -0.4, grow: 1.5 });
+          this.fx.laneFlash(laneZ(l), '#a6ff3a');
+        }
+        this.sfx('magic');
+        break;
+      }
+      case 'chainStorm': {
+        let cur = this.nearest(x, z0, 99, true);
+        let from = new THREE.Vector3(x, 0.8, z0);
+        const hit = new Set<number>();
+        for (let i = 0; cur && i < e.hops; i++) {
+          hit.add(cur.uid);
+          const to = new THREE.Vector3(cur.x, 0.8, cur.zPos);
+          this.fx.lightning(from, to, '#e8d0ff');
+          this.damageZombie(cur, dm(e.damage), { kind: 'volt' });
+          from = to;
+          const c = cur;
+          cur = this.nearest(c.x, c.zPos, 99, true, (o) => !hit.has(o.uid));
+        }
+        this.sfx('zap');
+        this.shake(0.1);
+        break;
+      }
+      case 'laneSmash': {
+        const targets = this.zombies
+          .filter((z) => z.dying < 0 && !z.hypno && z.lane === lane && z.x > x - 0.6 && z.x < RIGHT_EDGE + 0.5 && !this.isFlying(z))
+          .sort((a, b) => a.x - b.x)
+          .slice(0, e.count);
+        targets.forEach((z, i) => {
+          this.damageZombie(z, dm(e.damage), { kind: 'blast' });
+          this.particles.burst(new THREE.Vector3(z.x, 0.1, z.zPos), { count: 22, colors: ['#7a5230', '#8fcf3a', '#ffffff'], speed: 3, up: 1.5 });
+          this.particles.ring(new THREE.Vector3(z.x, 0.2, z.zPos), '#8fcf3a', 1.6, 0.4 + i * 0.1);
+        });
+        if (!targets.length) this.particles.ring(new THREE.Vector3(x + 1, 0.2, z0), '#8fcf3a', 1.6, 0.4);
+        this.sfx('smash');
+        this.shake(0.2);
         break;
       }
       case 'hypnoEater':

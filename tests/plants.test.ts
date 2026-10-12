@@ -187,7 +187,13 @@ describe('every plant works in battle', () => {
         b.spawnPlant(def.id, 2, LANE);
         run(b, 3);
         if (bh.effect.type === 'giveSun') expect(b.pickups.filter((k) => k.kind === 'sun').reduce((s, k) => s + k.value, 0)).toBe(bh.effect.amount);
-        else expect(b.plantFood).toBe(1);
+        else {
+          // Vigor Lily drops a Plant Food leaf that the player taps to collect.
+          const leaf = b.pickups.find((k) => k.kind === 'plantfood');
+          expect(leaf).toBeTruthy();
+          b.collect(leaf!);
+          expect(b.plantFood).toBe(1);
+        }
         return;
       }
       if (bh.type === 'instant' && bh.effect.type === 'boostProducers') {
