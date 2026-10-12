@@ -57,6 +57,7 @@ export type BattleEvent =
   | { type: 'banner'; text: string; style: 'huge' | 'final' | 'info' }
   | { type: 'collect'; kind: PickupKind; value: number; world: THREE.Vector3 }
   | { type: 'shake'; amount: number }
+  | { type: 'pf'; name: string; world: THREE.Vector3 }
   | { type: 'end'; result: 'won' | 'lost' };
 
 export type PickupKind = 'sun' | 'plantfood' | 'coin' | 'trophy';
@@ -400,9 +401,9 @@ export class Battle {
     return true;
   }
 
-  usePlantFood(col: number, lane: number): boolean {
+  usePlantFood(col: number, lane: number, target?: PlantEntity): boolean {
     if (this.phase !== 'playing') return false;
-    const p = this.grid[lane]?.[col] ?? this.overlays[lane]?.[col];
+    const p = target && !target.dead ? target : (this.grid[lane]?.[col] ?? this.overlays[lane]?.[col]);
     if (!p || p.def.noPlantFood) return false;
     if (!this.rules.unlimitedPlantFood && this.plantFood <= 0) return false;
     if (!this.rules.unlimitedPlantFood) this.plantFood--;
@@ -413,6 +414,8 @@ export class Battle {
     this.particles.burst(at, { count: 30, colors: ['#5dff6a', '#b8ffb0', '#ffffff'], speed: 2.5, up: 2, gravity: 2 });
     this.fx.glowBurst(at, '#7dff7a', 1.2);
     applyPlantFood(this, p);
+    const name = p.def.pfText.split(':')[0].trim();
+    this.events.push({ type: 'pf', name: name.length < 28 ? name : 'Plant Food!', world: new THREE.Vector3(p.x, p.model.muzzleY + 0.5, p.z) });
     return true;
   }
 
