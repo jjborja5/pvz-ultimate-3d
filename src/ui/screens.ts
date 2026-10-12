@@ -18,7 +18,8 @@ import {
 } from '../game/config';
 import { plantStats } from '../game/plants/stats';
 import { claimDaily, dailyRewards, dailyStatus } from '../game/daily';
-import { rules, defaultSave, type UltimateSettings, type GameSettings } from '../game/save';
+import { rules, defaultSave, migrate, type UltimateSettings, type GameSettings } from '../game/save';
+import { STANDALONE_URL, isEmbedded, isStandalone } from './platform';
 import type { BattleView } from '../views/battleView';
 import { clear, h } from './dom';
 import { thumbImg } from './thumbs';
@@ -115,6 +116,7 @@ export function titleScreen(app: App) {
         btn(daily.claimable ? '🎁 Daily Reward!' : '🎁 Daily', () => app.ui.append(dailyModal(app)), daily.claimable ? 'gift pulse' : 'gift'),
         btn('⚙️', () => app.showScreen('settings')),
       ),
+      isStandalone() ? null : btn('📲 Play Fullscreen', () => app.ui.append(installModal(app)), 'small install'),
       h(
         'div',
         { class: 'modes' },
@@ -128,6 +130,44 @@ export function titleScreen(app: App) {
     resources(app),
     h('div', { class: 'footer', text: 'Unofficial fan-made game · original art & sound · Phase 2 build' }),
   );
+}
+
+/** How to get true fullscreen: open the standalone site and add it to the Home Screen. */
+export function installModal(_app: App) {
+  const overlay = h('div', { class: 'overlay install' });
+  const embedded = isEmbedded();
+  const copy = btn('Copy link', () => {
+    const done = () => (copy.textContent = 'Copied!');
+    navigator.clipboard?.writeText(STANDALONE_URL).then(done, () => {
+      const range = document.createRange();
+      range.selectNodeContents(link);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+    });
+  }, 'small');
+  const link = h('a', { class: 'install-link', text: STANDALONE_URL, attrs: { href: STANDALONE_URL, target: '_blank', rel: 'noopener' } });
+  overlay.append(
+    h(
+      'div',
+      { class: 'panel scroll' },
+      h('h2', { text: '📲 Play Fullscreen' }),
+      embedded
+        ? h('p', { text: 'You are playing inside another app’s viewer, which adds its own bars. For the full-screen game, open the standalone version in Safari:' })
+        : h('p', { text: 'Add the game to your Home Screen to play without Safari’s bars:' }),
+      h('div', { class: 'row' }, link, copy),
+      h(
+        'ol',
+        { class: 'install-steps' },
+        h('li', { text: 'Open the link above in Safari.' }),
+        h('li', { html: 'Tap the <b>Share</b> button (square with an up arrow).' }),
+        h('li', { html: 'Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.' }),
+        h('li', { text: 'Launch “PvZ Ultimate” from its icon and turn your iPhone sideways. It runs fullscreen, works offline, and keeps its own save.' }),
+      ),
+      h('p', { class: 'note', text: 'Your progress is stored per website. To bring it along, use Settings → Transfer Progress: copy the code here, then load it in the Home Screen app.' }),
+      btn('Close', () => overlay.remove(), 'primary'),
+    ),
+  );
+  return overlay;
 }
 
 function dailyModal(app: App) {
@@ -488,8 +528,63 @@ export function settingsScreen(app: App) {
         h('b', { text: 'How to play' }),
         h('p', { text: 'Tap a seed packet, then tap a lawn tile (or drag the packet onto the lawn). Tap or swipe over sun to collect it. Use 🌿 Plant Food then tap a plant to trigger its super ability. Use ⛏️ to dig up a plant. Pumpkin Shell can be planted on top of other plants. Survive every wave to win!' }),
       ),
+      transferPanel(app),
       reset,
     ),
+  );
+}
+
+/** Copy the save as a code, or load a code, to move progress between the artifact and the Home Screen app. */
+function transferPanel(app: App) {
+  const area = h('textarea', { class: 'transfer', attrs: { rows: '3', spellcheck: 'false', placeholder: 'Paste a progress code here, then tap Load', id: 'transfer-code' } }) as HTMLTextAreaElement;
+  const status = h('small', { text: '' });
+  const encode = () => btoa(unescape(encodeURIComponent(JSON.stringify(app.save))));
+  let armed = false;
+  return h(
+    'div',
+    { class: 'help' },
+    h('b', { text: '📦 Transfer Progress' }),
+    h('p', { text: 'Copy your progress code here, then paste it into the game on another website (for example the Home Screen app).' }),
+    area,
+    h(
+      'div',
+      { class: 'row', style: 'justify-content:flex-start' },
+      btn(
+        'Copy my code',
+        () => {
+          area.value = encode();
+          area.select();
+          navigator.clipboard?.writeText(area.value).then(
+            () => (status.textContent = 'Copied! Paste it into the other copy of the game.'),
+            () => (status.textContent = 'Code selected — use Copy from the menu.'),
+          );
+        },
+        'small',
+      ),
+      btn(
+        'Load code',
+        () => {
+          let data: Record<string, unknown>;
+          try {
+            data = JSON.parse(decodeURIComponent(escape(atob(area.value.trim()))));
+          } catch {
+            status.textContent = 'That code is not valid. Copy it again and paste the whole thing.';
+            return;
+          }
+          if (!armed) {
+            armed = true;
+            status.textContent = 'Tap Load again to replace this device’s progress.';
+            setTimeout(() => (armed = false), 4000);
+            return;
+          }
+          app.save = migrate(data);
+          app.persist();
+          status.textContent = 'Progress loaded!';
+        },
+        'small primary',
+      ),
+    ),
+    status,
   );
 }
 

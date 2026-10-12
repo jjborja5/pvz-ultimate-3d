@@ -1120,6 +1120,7 @@ button {
   justify-content: center;
   padding: calc(8px + var(--safe-t)) calc(12px + var(--safe-r)) calc(8px + var(--safe-b)) calc(12px + var(--safe-l));
   animation: fadein 0.2s;
+  z-index: 20;
 }
 @keyframes fadein {
   from {
@@ -1731,4 +1732,45 @@ body.mode-shovel .rail-left .packet {
     font-size: 19px;
     padding: 8px 18px;
   }
+}
+
+/* install guide + transfer */
+.btn.install {
+  background: linear-gradient(#e8f4ff, #8ac8ff);
+}
+.install .panel {
+  max-width: 560px;
+  align-items: stretch;
+}
+.install-link {
+  font-size: 13px;
+  word-break: break-all;
+  color: #1a5a8a;
+  user-select: text;
+  -webkit-user-select: text;
+  flex: 1;
+  align-self: center;
+}
+.install-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.install .note {
+  font-size: 12px;
+  opacity: 0.75;
+}
+textarea.transfer {
+  width: 100%;
+  font-size: 11px;
+  border-radius: 8px;
+  border: 2px solid #c9a46a;
+  padding: 4px;
+  margin: 6px 0;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: auto;
 }

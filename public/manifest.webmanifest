@@ -1,13 +1,17 @@
 {
+  "id": "./",
   "name": "PvZ Ultimate 3D",
   "short_name": "PvZ Ultimate",
+  "description": "Fan-made 3D lane tower defense with 100 plants and Ultimate Mode.",
   "start_url": "./",
+  "scope": "./",
   "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "orientation": "landscape",
   "background_color": "#2f7a2a",
   "theme_color": "#2f7a2a",
   "icons": [
     { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
