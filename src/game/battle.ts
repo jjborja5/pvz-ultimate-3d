@@ -1093,6 +1093,39 @@ export class Battle {
       case 'summonAlly':
         this.spawnAlly(e.zombie, lane, x + 0.3);
         break;
+      case 'laneStrike': {
+        for (const z of this.zombies) if (z.dying < 0 && !z.hypno && z.lane === lane && z.x < RIGHT_EDGE + 0.5 && !this.isFlying(z)) this.damageZombie(z, dm(e.damage), { kind: 'melee' });
+        for (let c = 0; c < COLS; c++) this.particles.burst(new THREE.Vector3(colX(c), 0.1, z0), { count: 6, colors: [e.color, '#ffffff'], speed: 1.2, up: 3.5, size: 0.06, life: 0.5 });
+        this.fx.laneFlash(z0, e.color);
+        this.sfx('punch');
+        this.shake(0.12);
+        break;
+      }
+      case 'healAll':
+        for (const p of this.plants) {
+          if (p.dead) continue;
+          p.hp = Math.min(p.maxHp, p.hp + e.amount);
+          this.particles.burst(new THREE.Vector3(p.x, 0.6, p.z), { count: 5, colors: ['#7dffb0', '#ffffff'], speed: 0.8, up: 1.2, gravity: -0.5 });
+        }
+        this.fx.screenTint('#9fffc8', 0.5);
+        this.sfx('heal');
+        break;
+      case 'transformArea': {
+        const id = 'puffcap';
+        for (const z of this.inArea(x, lane, e.radius, e.lanes)) {
+          if (z.def.boss) {
+            this.damageZombie(z, dm(500), { kind: 'magic' });
+            continue;
+          }
+          const col = Math.round(z.x + (COLS - 1) / 2);
+          const zl = z.lane;
+          this.consumeZombie(z, '#c07ad8');
+          if (col >= 0 && col < COLS && this.canPlaceAt(id, col, zl)) this.spawnPlant(id, col, zl);
+        }
+        this.particles.ring(new THREE.Vector3(x, 0.5, z0), '#e07aff', 2 + e.radius, 0.5);
+        this.sfx('magic');
+        break;
+      }
       case 'hypnoEater':
       case 'stunEater':
       case 'sunEater':
@@ -1256,7 +1289,7 @@ export class Battle {
     const sp = pr.spec;
     pr.hits.add(z.uid);
     const hadArmor = z.armor > 0 || z.shield > 0;
-    const front = pr.vx > 0 && sp.path !== 'lob';
+    const front = pr.vx > 0 && sp.path !== 'lob' && sp.pierce !== Infinity;
     const kind = pr.fire ? 'fire' : sp.look === 'snow' || sp.look === 'wmelon' ? 'ice' : sp.look === 'volt' || sp.look === 'plasma' ? 'volt' : sp.look === 'goo' ? 'poison' : 'pea';
     const blocked = front && z.shield > 0;
     this.damageZombie(z, pr.damage, { kind, front });

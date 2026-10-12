@@ -40,7 +40,7 @@ export function initPlant(b: Battle, p: PlantEntity) {
       p.s.strikes = 0;
       break;
     case 'grab':
-      p.timer = bh.interval ? bh.interval * 0.4 : 0;
+      p.timer = bh.kind === 'transform' ? 1.5 : 0;
       break;
     default:
       p.timer = 0.4;
@@ -407,6 +407,8 @@ function updateBeam(b: Battle, p: PlantEntity, bh: Extract<Behavior, { type: 'be
 }
 
 function updateGrab(b: Battle, p: PlantEntity, bh: Extract<Behavior, { type: 'grab' }>, dt: number, k: number) {
+  const frenzy = p.pfTime > 0 && bh.kind === 'devour';
+  if (frenzy && p.s.chew > 0.4) p.s.chew = 0.4;
   if (p.s.chew > 0) {
     p.s.chew -= dt * k;
     return;
@@ -428,13 +430,14 @@ function updateGrab(b: Battle, p: PlantEntity, bh: Extract<Behavior, { type: 'gr
   }
   p.timer -= dt * k;
   if (p.timer > 0) return;
-  const t = b.firstInLane(p.lane, p.x - (bh.kind === 'squash' ? bh.range : 0), bh.range * (bh.kind === 'squash' ? 2 : 1) + 0.1, 1, false);
+  const reach = bh.range * (frenzy ? 3 : 1);
+  const t = b.firstInLane(p.lane, p.x - (bh.kind === 'squash' ? bh.range : 0), reach * (bh.kind === 'squash' ? 2 : 1) + 0.1, 1, false);
   if (!t) return;
   switch (bh.kind) {
     case 'devour':
       if (t.def.boss) b.damageZombie(t, b.damageOf(p, 600), { kind: 'melee' });
       else b.consumeZombie(t, '#5aa040');
-      p.s.chew = bh.chew ?? 30;
+      p.s.chew = frenzy ? 0.4 : (bh.chew ?? 30);
       p.recoil = 1;
       b.sfx('gulp');
       break;

@@ -123,7 +123,10 @@ export type Effect =
   | { type: 'stunAll'; duration: number; damage: number }
   | { type: 'strikeAll'; damage: number }
   | { type: 'laser'; lanes: number; damage: number }
-  | { type: 'summonAlly'; zombie: 'basic' | 'cone' | 'bucket' | 'brute' | 'knight' };
+  | { type: 'summonAlly'; zombie: 'basic' | 'cone' | 'bucket' | 'brute' | 'knight' }
+  | { type: 'laneStrike'; damage: number; color: string }
+  | { type: 'healAll'; amount: number }
+  | { type: 'transformArea'; radius: number; lanes: number };
 
 export type Behavior =
   | {

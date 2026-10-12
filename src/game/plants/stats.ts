@@ -44,6 +44,9 @@ function effectLines(e: Effect, dmg: number, out: StatLine[]) {
     case 'grapes':
       out.push({ label: 'Grapes', value: `${e.count} × ${r(e.damage * dmg)}` });
       break;
+    case 'givePlantFood':
+      out.push({ label: 'Plant Food', value: `+${e.amount}` });
+      break;
     case 'stunEater':
       out.push({ label: 'Stun', value: `${e.duration}s` });
       break;
