@@ -133,13 +133,14 @@ npm run build        # multi-file build in dist/ (used by GitHub Pages)
 npm run build:single # one self-contained HTML file in dist-single/
 ```
 
-Tests (`tests/`, 405 tests) run the battle simulation headlessly:
+Tests (`tests/`, 592 tests) run the battle simulation headlessly:
 - `plants.test.ts`: every one of the 100 plants has valid data, a distinct model and a unique behavior.
   It acts on zombies in a real battle, and its Plant Food works.
 - `mechanics1-4.test.ts`: each plant's signature mechanic, one batch of 25 per file, plus power-ups.
 - `battle.test.ts`: core rules (win, lose, mowers, invincibility, sun, recharge).
 - `balance.test.ts`: a scripted player beats every World 1 level *without* Ultimate Mode.
 - `save.test.ts`: Phase 1 → Phase 2 save migration, Ultimate rules and daily rewards.
+- `plantfood.test.ts`: Plant Food audit. Every plant's Plant Food must beat a no-Plant-Food control run (near and far zombies), plus unlimited Plant Food and Pumpkin Shell cases.
 
 ### Project structure
 ```
