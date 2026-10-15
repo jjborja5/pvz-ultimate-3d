@@ -1,67 +1,83 @@
 # Castle Dominion
 
-An original 3D fantasy tower-defense game for **Godot 4.3+ (GDScript)**, designed for portrait iPhone play with
+An original 3D fantasy tower-defense game for **Godot 4.5+ (GDScript)**, designed for portrait iPhone play with
 **permanent God Mode** enabled by default: no payments, ads, subscriptions or grinding.
 
-All art is generated in code: procedural low-poly models, shaders, particles and vector UI icons.
-The project ships no external or third-party art assets.
-
-![Battles](docs/screenshots/battles.png)
-![Menu and UI](docs/screenshots/menu_ui.png)
+![Maps](docs/screenshots/p3_maps.png)
+![Combat](docs/screenshots/p3_combat.png)
+![Menus](docs/screenshots/p3_menus.png)
 
 ## Running
 
-1. Install Godot 4.3 or newer (standard build, not .NET).
-2. Open `project.godot` in the editor and press **Play**, or run `godot --path .` from this folder.
+1. Install **Godot 4.5.1** or newer (standard build, not .NET).
+2. Open `project.godot` in the editor and press **Play**, or run `godot --path .`.
 3. The desktop window opens at 540×960 (portrait). Mouse emulates touch.
+4. On first launch the game bakes character animations (about 5 s, with a progress screen). They are then cached in `user://bake_cache/`.
 
-**Controls:** tap a glowing pad to build, tap a tower to upgrade or sell, tap an enemy to focus fire (manual
-targeting), tap a spell and then the battlefield to cast. Drag to pan, and use the mouse wheel or pinch to zoom.
-The **crown** button opens the God Mode panel.
+**Controls:**
+- Tap a glowing pad to build a tower; tap a tower to upgrade or sell it.
+- **BUILD** places traps, barriers and walls on the battlefield.
+- Tap a hero portrait to fire their ultimate. Tap a spell, then the battlefield, to cast (**1/2 >** pages through the 8 spells).
+- Tap an enemy to focus all fire on it.
+- Drag to pan; use the mouse wheel or pinch to zoom.
+- The **crown** button opens the God Mode panel.
 
-## Status (Phase 1 + early Phase 2)
+## Art
 
-| Area | State |
+Characters and environment use **CC0 KayKit assets by Kay Lousberg** (rigged and animated characters, castle and
+nature kits; see [CREDITS.md](CREDITS.md)). They are recoloured and re-equipped per hero or enemy. Effects, shaders,
+the dragon, UI icons and all gameplay are original code. `tools/fetch_assets.sh` documents where every asset came from.
+
+Horde rendering: rigged characters are baked by `UnitBaker` (CPU skinning) into walk, attack and death frame meshes,
+plus automatically decimated LOD frames. Hundreds of animated units then draw as one MultiMesh per (type, frame).
+
+## Feature status
+
+### Done and covered by automated tests
+| Area | Notes |
 |---|---|
-| 3D battlefield: procedural terrain, lanes, river/lava channels, trees, rocks, ruins, sky, fog, glow, shadows | Working |
-| 4 maps: Verdant Pass, Molten Abyss, Shattered Ruins, Skyspire Peaks | Working |
-| Castle: stone walls, gatehouse, corner towers, keep, banners, torches, magic barrier | Working |
-| Horde: 5 enemy types + 2 bosses, GPU-animated limbs, one MultiMesh per type, health bars | Working; stress-tested with 500+ enemies |
-| Enemy movement: 3 curving lanes with spread, wall attack, slow/freeze/burn | Working (lane-following, not grid pathfinding) |
-| Towers: Archer, Cannon, Storm Spire, Inferno, Frost; 5 levels each with visual changes | Working |
-| Spells: Fireball, Chain Storm, Ice Storm, Meteor | Working |
-| Waves: Campaign (30), Endless, Boss Rush, Sandbox, God Mode Playground | Working |
-| God Mode panel: invincibility, unlimited resources, no cooldowns, free upgrades, one-hit kills, instant waves, game/attack speed, spawn count, spawn armies/bosses, kill all, max/fill towers, change map/difficulty, reset, unlock/max all | Working, saved between sessions |
-| Main menu: Start Battle (mode/map/difficulty), Towers, Inventory, World Map, God Mode, Settings | Working |
-| Heroes, Equipment, Upgrades screens | Placeholder screens (Phase 3) |
-| Traps, barriers, walls as buildable defenses | Not yet (Phase 3) |
-| Sound and music | Not yet (Phase 4) |
-| Roguelike picks, loot tables, permanent progression trees | Not yet (Phase 3/5) |
-| iOS export preset and device testing | Not yet (Phase 6) |
+| **9 heroes** | Archer, Fire Mage, Ice Wizard, Lightning Sorcerer, Paladin, Druid, Necromancer, Dwarf Engineer, Dragon Summoner. Animated models; each has unique weapons, colours, attack type, element and ultimate. |
+| **Hero ultimates** | Arrow Storm, Firestorm (fire tornadoes), Glacial Spikes, Thunder Dome, Divine Judgment (light pillar + castle heal), Wrath of the Grove (roots + poison), Army of the Dead (spectral allies), Mortar Barrage, Summon Elder Dragon (flying procedural dragon). |
+| **Hero progression** | Levels 1–60 with XP from battles, ability levels 1–10, 4 skins, 3-hero team on the castle walls. |
+| **Equipment** | Weapon, armor and accessory slots; 5 rarities (Common to Mythic); upgradeable item levels; 14 named legendaries/mythics with unique effects; salvage. |
+| **Defenses** | Spike Trap, Blast Barrel, Frost Rune, Arcane Barrier (hex force field) and Stone Wall, each with 3 visual levels. Blockers hold enemies until destroyed. |
+| **Roguelike** | 24 blessings offered every 3 waves (every wave in Playground), stacking modifiers, 7 combos (Steam Burst, Superconductor, Wildfire, Shatter…). |
+| **Loot** | Coins fly to the castle; bosses and elites drop treasure chests with equipment; rewards and hero XP are kept after each battle. |
+| **Permanent upgrades** | 13 upgrades across Castle, Economy, Towers, Magic and Heroes. |
+| **Enemies** | 9 regular types (goblins, 4 skeleton kinds incl. ranged archers and mages, orcs, fiends, ogres, dread knights) and 4 elite affixes. |
+| **Bosses** | Molten Tyrant (slam), Hollow King (summon + soul shield), Bone Colossus (slam), Dread Warlord (rally). Cinematic intro (camera fly-in, letterbox, title, slow motion) and enrage at 50% HP. |
+| **Spells** | Fireball, Chain Storm, Ice Storm, Meteor, Meteor Rain, Firestorm, Frost Nova, Divine Wrath. |
+| **Menus** | Heroes (live 3D turntable), Equipment, Inventory, Upgrades, Towers, World Map, Settings, God Mode. No placeholder screens remain. |
+| **God Mode** | Unlimited resources, everything unlocked, Max Power (heroes, abilities, items, upgrades at max), no cooldowns, invincible castle and defenses, one-hit kills, instant waves, game/attack speed, spawn count, per-boss spawning, build all defenses, blessing tools, grant all legendaries. |
+| **Phase 1 features** | 4 maps, 5 modes, 5 towers with 5 levels, wave system, save data: all kept. |
 
-### Known issues
-- In the **Compatibility (OpenGL)** renderer the horde shader shows wrong colours (dark teal tint). The project
-  targets the **Mobile (Vulkan/Metal)** renderer, where it renders correctly. Fix planned for Phase 6.
-- Headless runs print `Parameter "m" is null` at shutdown. This comes from the dummy renderer only and is harmless.
+### Not done yet
+- Sound and music (Phase 4).
+- Hand-authored VFX textures and post-processing polish (Phase 4); current effects are procedural.
+- An iOS export preset and testing on a real device (Phase 6). Performance has only been measured on desktop/software rendering.
+- The Compatibility (OpenGL) renderer tints the horde shader incorrectly; the target Mobile (Vulkan/Metal) renderer is correct.
 
 ## Tests
 
 ```bash
 godot --headless --import
-godot --headless res://tests/smoke_test.tscn   # gameplay + God Mode checks (exits 1 on failure)
-godot --headless res://tests/modes_test.tscn   # loads menu + every mode on every map
-tests/shoot.sh <out_dir> <map> <battle|menu>   # real-renderer screenshots (xvfb + lavapipe Vulkan)
+godot --headless res://tests/compile_check.tscn   # compiles every script
+godot --headless res://tests/smoke_test.tscn      # core gameplay + God Mode
+godot --headless res://tests/phase3_test.tscn     # heroes, defenses, blessings, loot, bosses, equipment, saves (52 checks)
+godot --headless res://tests/modes_test.tscn      # menu + every mode on every map
+tests/shoot.sh <out_dir> <map> <battle|menu|heroes>   # real-renderer screenshots (xvfb + lavapipe Vulkan)
 ```
 
 ## Layout
 
 ```
-scripts/autoload/  game_data.gd (definitions), game_state.gd (God Mode, currencies, saves)
-scripts/core/      mesh_kit.gd (mesh merging), models.gd (procedural model library)
-scripts/battle/    battle, world_builder, castle, enemy_manager, tower, projectile_system,
-                   spell_system, wave_manager, fx
-scripts/ui/        ui_theme, icon_art, hud, god_panel, main_menu
-shaders/           unit (horde animation), prop, liquid (lava/water), hpbar
-scenes/            main_menu.tscn, battle.tscn
-tests/             smoke_test, modes_test, screenshot
+assets/kaykit/      CC0 KayKit models (characters, hexagon, dungeon, halloween) + licences
+scripts/autoload/   game_data.gd (all content definitions), game_state.gd (progression, God Mode, saves)
+scripts/core/       unit_baker (animation baking), assets, models (procedural), loot, hero_stats, mesh_kit
+scripts/battle/     battle, world_builder, castle, enemy_manager, tower, hero, hero_abilities, defenses,
+                    run_state, loot_drops, boss_director, spell_system, projectile_system, wave_manager, fx
+scripts/ui/         hud, god_panel, main_menu, hero_preview, ui_theme, icon_art
+shaders/            unit_tex (horde), prop_tex, terrain, force_field, liquid, bar, hpbar, prop, unit
+tools/              fetch_assets.sh
+tests/              compile_check, smoke_test, phase3_test, modes_test, screenshot, closeup, hero_lineup
 ```

@@ -60,6 +60,7 @@ func _ready() -> void:
 	_switch(list, "free_upgrades", "Free Instant Upgrades")
 	_switch(list, "one_hit_kill", "One-Hit Kills")
 	_switch(list, "auto_complete_waves", "Instant Wave Completion")
+	_switch(list, "max_power", "Max Power (heroes, items, upgrades at max)")
 
 	_section(list, "TUNING")
 	_slider(list, "game_speed", "Game Speed", 0.25, 5.0, 0.25)
@@ -75,7 +76,18 @@ func _ready() -> void:
 	_action(grid, "Kill All Enemies", UITheme.RED, func(): battle.god_kill_all())
 	_action(grid, "Complete Wave", UITheme.RED, func(): battle.god_complete_wave())
 	_action(grid, "Spawn Army x100", UITheme.PURPLE, func(): battle.god_spawn_army("mixed", 100))
-	_action(grid, "Spawn Boss", UITheme.PURPLE, func(): battle.god_spawn_boss())
+	_action(grid, "Spawn Random Boss", UITheme.PURPLE, func(): battle.god_spawn_boss())
+	for bt in GameData.BOSS_TYPES:
+		_action(grid, "Boss: " + String(GameData.ENEMIES[bt]["name"]).get_slice(",", 0), Color(0.5, 0.12, 0.2), func(): battle.god_spawn_boss(bt))
+	_action(grid, "Cast All Ultimates", Color(0.55, 0.38, 0.05), func():
+		for i in battle.heroes.size():
+			battle.heroes[i].ability_cd = 0.0
+			battle.cast_hero(i))
+	_action(grid, "Build All Defenses", UITheme.GREEN, func(): battle.god_build_defenses())
+	_action(grid, "Pick a Blessing", UITheme.PURPLE, func():
+		_close()
+		battle.god_blessing())
+	_action(grid, "All Blessings + Combos", UITheme.PURPLE, func(): battle.god_all_blessings())
 	for type in GameData.REGULAR_TYPES:
 		_action(grid, "+25 " + String(GameData.ENEMIES[type]["name"]).get_slice(" ", 1 if type != "goblin" else 0), UITheme.BLUE, func(): battle.god_spawn_army(type, 25))
 	_action(grid, "Max All Towers", UITheme.GREEN, func(): battle.god_max_towers())
@@ -124,6 +136,20 @@ func _ready() -> void:
 			battle.god_max_towers()
 		_flash("All upgrades maximised")
 	_action(g2, "Max All Upgrades", UITheme.GREEN, max_all, false)
+	var unlock_heroes := func():
+		GameState.max_all_heroes()
+		_flash("All heroes unlocked at max level")
+	_action(g2, "Unlock + Max Heroes", UITheme.GREEN, unlock_heroes, false)
+	var all_items := func():
+		GameState.grant_all_legendaries()
+		_flash("Every legendary and mythic granted")
+	_action(g2, "Grant All Legendaries", UITheme.GREEN, all_items, false)
+	var cash := func():
+		for k in GameState.currencies:
+			GameState.currencies[k] = 999999
+		GameState.save_state()
+		_flash("Stored currencies set to 999,999")
+	_action(g2, "Fill Currency Stores", UITheme.GREEN, cash, false)
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 30)
 	list.add_child(spacer)

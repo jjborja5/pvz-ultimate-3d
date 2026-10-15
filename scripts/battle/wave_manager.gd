@@ -61,27 +61,40 @@ func _compose(w: int) -> Array:
 		base = int((6 + w * 2) * count_mult)
 	var t := 0.0
 	var interval := clampf(1.1 - w * 0.03, 0.18, 1.1) / maxf(1.0, count_mult * 0.6)
-	var pool: Array = ["goblin"]
-	if w >= 2: pool.append("skeleton")
-	if w >= 4: pool.append("orc")
-	if w >= 7: pool.append("demon")
+	var pool: Array = ["goblin", "skeleton"]
+	if w >= 2: pool.append("orc")
+	if w >= 3: pool.append("skeleton_archer")
+	if w >= 5: pool.append("skeleton_warrior")
+	if w >= 6: pool.append("demon")
+	if w >= 8: pool.append("skeleton_mage")
 	if w >= 10: pool.append("brute")
+	if w >= 12: pool.append("dark_knight")
 	if mode == "playground" or mode == "boss_rush":
 		pool = GameData.REGULAR_TYPES.duplicate()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = w * 7919 + hash(mode)
+	var elite_chance := clampf(0.03 + (w - 5) * 0.008, 0.0, 0.25) if w >= 5 else 0.0
+	if mode == "playground":
+		elite_chance = 0.15
+	var elite_types: Array = GameData.ELITES.keys()
 	var squad_lane := 0
+	var squad_type := "goblin"
 	for i in base:
 		if i % 6 == 0:
 			squad_lane = rng.randi_range(0, WorldBuilder.LANE_COUNT - 1)
-		var type: String = pool[rng.randi_range(0, pool.size() - 1)]
-		if type == "brute" and rng.randf() < 0.6:
+			squad_type = pool[rng.randi_range(0, pool.size() - 1)]
+		# squads share a type (looks like an army); some variety mixed in
+		var type: String = squad_type if rng.randf() < 0.7 else pool[rng.randi_range(0, pool.size() - 1)]
+		if (type == "brute" or type == "dark_knight") and rng.randf() < 0.55:
 			type = "orc"
-		q.append({"t": t, "type": type, "lane": squad_lane})
+		var elite := ""
+		if rng.randf() < elite_chance:
+			elite = elite_types[rng.randi_range(0, elite_types.size() - 1)]
+		q.append({"t": t, "type": type, "lane": squad_lane, "elite": elite})
 		t += interval * rng.randf_range(0.4, 1.4)
 	if is_boss_wave(w):
-		var boss: String = GameData.BOSS_TYPES[(w / 5) % GameData.BOSS_TYPES.size()] if mode != "boss_rush" else GameData.BOSS_TYPES[w % 2]
-		q.append({"t": t * 0.5, "type": boss, "lane": 1})
+		var boss: String = GameData.BOSS_TYPES[(w / 5 - 1) % GameData.BOSS_TYPES.size()] if mode != "boss_rush" else GameData.BOSS_TYPES[(w - 1) % GameData.BOSS_TYPES.size()]
+		q.append({"t": t * 0.5, "type": boss, "lane": 1, "elite": ""})
 	q.sort_custom(func(a, b): return a["t"] < b["t"])
 	return q
 
@@ -132,7 +145,7 @@ func _drain_queue(extra_delta: float) -> void:
 		var boss_scale := 1.0
 		if GameData.ENEMIES[item["type"]].get("boss", false) and mode == "boss_rush":
 			boss_scale = 0.5 + wave * 0.15
-		enemies.spawn(item["type"], item["lane"], WorldBuilder.SPAWN_Z, boss_scale)
+		enemies.spawn(item["type"], item["lane"], WorldBuilder.SPAWN_Z, boss_scale, item.get("elite", ""))
 		spawned += 1
 
 

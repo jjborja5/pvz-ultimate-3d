@@ -1,9 +1,10 @@
 extends Node3D
-## Battle scene root. Wires together world, castle, horde, towers, spells, waves,
-## camera, touch input and the HUD, and exposes God Mode actions.
+## Battle scene root. Wires together world, castle, horde, towers, heroes, defenses,
+## spells, waves, roguelike run state, loot, boss director, camera, touch input and HUD,
+## and exposes God Mode actions.
 
 const CAM_MIN_Z := -62.0
-const CAM_MAX_Z := -16.0
+const CAM_MAX_Z := -10.0
 const START_GOLD := 450
 
 var map_id := "verdant_pass"
@@ -16,6 +17,11 @@ var enemies: EnemyManager
 var projectiles: ProjectileSystem
 var spells: SpellSystem
 var waves: WaveManager
+var defenses: DefenseSystem
+var loot: LootDrops
+var bosses: BossDirector
+var run := RunState.new()
+var heroes: Array[Hero] = []
 var hud: BattleHUD
 var camera: Camera3D
 
@@ -24,10 +30,13 @@ var kills := 0
 var focus_target: EnemyManager.Enemy = null
 var current_boss: EnemyManager.Enemy = null
 var selected_pad := -1
+var selected_defense: DefenseSystem.Defense = null
 var armed_spell := ""
+var placing_defense := ""
 var game_over := false
+var rewards_applied := false
 
-var _cam_look_z := -24.0
+var _cam_look_z := -15.0
 var _cam_zoom := 1.0
 var _shake := 0.0
 var _press_pos := Vector2.ZERO
@@ -36,6 +45,11 @@ var _dragging := false
 var _touches := {}
 var _pinch_dist := 0.0
 var _focus_marker: MeshInstance3D
+var _elem_bonus := {}
+var _hero_effects: Array = []
+var _auto_meteor_t := 18.0
+var _auto_thunder_t := 10.0
+var _cine_blend := 0.0
 
 
 func _ready() -> void:
@@ -62,6 +76,7 @@ func _build() -> void:
 	enemies.name = "Enemies"
 	add_child(enemies)
 	enemies.setup(world, fx)
+	enemies.damage_modifier = _damage_mod
 	projectiles = ProjectileSystem.new()
 	projectiles.name = "Projectiles"
 	add_child(projectiles)
@@ -74,6 +89,18 @@ func _build() -> void:
 	waves.name = "Waves"
 	add_child(waves)
 	waves.setup(enemies, mode)
+	defenses = DefenseSystem.new()
+	defenses.name = "Defenses"
+	add_child(defenses)
+	defenses.setup(self)
+	loot = LootDrops.new()
+	loot.name = "Loot"
+	add_child(loot)
+	loot.setup(self)
+	bosses = BossDirector.new()
+	bosses.name = "Bosses"
+	add_child(bosses)
+	bosses.setup(self)
 
 	camera = Camera3D.new()
 	camera.keep_aspect = Camera3D.KEEP_WIDTH
@@ -93,10 +120,13 @@ func _build() -> void:
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.albedo_color = Color(1.0, 0.2, 0.15)
-	fm.emission_enabled = true
 	_focus_marker.material_override = fm
 	_focus_marker.visible = false
 	add_child(_focus_marker)
+
+	_deploy_heroes()
+	_apply_castle_stats()
+	gold = START_GOLD + int(GameState.upgrade_value("start_gold"))
 
 	var layer := CanvasLayer.new()
 	layer.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -109,15 +139,85 @@ func _build() -> void:
 	enemies.enemy_killed.connect(_on_enemy_killed)
 	enemies.castle_hit.connect(_on_castle_hit)
 	enemies.boss_spawned.connect(_on_boss_spawned)
+	enemies.ranged_attack.connect(_on_ranged_attack)
+	enemies.blocker_hit.connect(func(b, dmg, _e): b.take_damage(dmg))
 	castle.destroyed.connect(_on_castle_destroyed)
 	waves.wave_started.connect(_on_wave_started)
 	waves.wave_cleared.connect(_on_wave_cleared)
 	waves.all_waves_cleared.connect(_on_victory)
+	loot.item_found.connect(func(item): hud.loot_toast(item))
 
 	if mode == "playground":
 		god_fill_pads()
 	elif mode == "sandbox":
 		hud.show_hint("Sandbox: open the crown panel to spawn armies")
+
+
+func _deploy_heroes() -> void:
+	var posts := castle.hero_posts
+	for i in mini(GameState.team.size(), posts.size()):
+		var id: String = GameState.team[i]
+		if not GameData.HEROES.has(id):
+			continue
+		var h := Hero.new()
+		add_child(h)
+		h.global_position = posts[i]
+		h.setup(id, self)
+		heroes.append(h)
+	# legendary bonuses that apply battle-wide
+	for h in heroes:
+		_hero_effects.append_array(h.stats["effects"])
+	_elem_bonus = {
+		"fire": (0.25 if _hero_effects.has("ignite") else 0.0) + (0.5 if _hero_effects.has("dragon") else 0.0),
+		"ice": 0.25 if _hero_effects.has("chill") else 0.0,
+		"holy": 0.4 if _hero_effects.has("holy_boost") else 0.0,
+		"nature": 0.35 if _hero_effects.has("nature_boost") else 0.0,
+		"shadow": 0.35 if _hero_effects.has("nature_boost") else 0.0,
+	}
+
+
+func _apply_castle_stats() -> void:
+	var hp_bonus := GameState.upgrade_value("castle_hp") + mod("fortify")
+	for h in heroes:
+		hp_bonus += float(h.stats["castle_hp"])
+	castle.set_max_hp(Castle.BASE_HP * (1.0 + hp_bonus))
+	castle.armor = GameState.upgrade_value("castle_armor") + (0.25 if _hero_effects.has("fortress") else 0.0)
+
+
+# ------------------------------------------------------------------ run modifiers
+
+func mod(key: String) -> float:
+	return run.mod(key)
+
+
+func has_combo(id: String) -> bool:
+	return run.has_combo(id)
+
+
+func _damage_mod(e: EnemyManager.Enemy, amount: float, element: String, source: String) -> float:
+	var a := amount * (1.0 + mod("el_" + element) + float(_elem_bonus.get(element, 0.0)))
+	if source == "tower":
+		a *= 1.0 + GameState.upgrade_value("tower_damage")
+	if e.boss or e.elite != "":
+		a *= 1.0 + mod("boss_dmg")
+	if mod("crit") > 0.0 and randf() < mod("crit"):
+		a *= 2.5
+	var slowed := e.slow > 0.0 or e.frozen_t > 0.0
+	if element == "lightning":
+		if has_combo("superconductor") and slowed:
+			a *= 2.0
+		if has_combo("wildfire"):
+			enemies.apply_burn(e, a * 0.2, 3.0)
+	if element == "physical" and has_combo("shatter") and e.frozen_t > 0.0:
+		a *= 3.0
+	if element == "fire" and has_combo("steam_burst") and slowed and source != "steam":
+		fx.frost_burst(e.pos, 2.0)
+		for o in enemies.enemies_in_radius(e.pos, 2.2):
+			if o != e:
+				enemies.damage(o, a * 0.4, "fire", false, "steam")
+	if mod("execute") > 0.0 and not e.boss and e.hp - a < e.max_hp * mod("execute"):
+		a = e.hp + 1.0
+	return a
 
 
 # ------------------------------------------------------------------ frame
@@ -133,12 +233,45 @@ func _process(delta: float) -> void:
 			_focus_marker.visible = false
 	if current_boss != null and not current_boss.alive:
 		current_boss = null
+	# slow motion during boss intros
+	var speed := GameState.god_value("game_speed", 1.0)
+	Engine.time_scale = clampf(speed * (0.35 if bosses.is_cinematic() else 1.0), 0.05, 8.0)
+	enemies.lod_z = _cam_look_z - 20.0
+	_run_auto_blessings(delta)
+
+
+func _run_auto_blessings(delta: float) -> void:
+	if mod("auto_meteor") > 0.0:
+		_auto_meteor_t -= delta
+		if _auto_meteor_t <= 0.0:
+			_auto_meteor_t = 18.0 / mod("auto_meteor")
+			var p := enemies.densest_point()
+			if p != Vector3.INF:
+				spells.force_cast("meteor", p)
+	if mod("auto_thunder") > 0.0:
+		_auto_thunder_t -= delta
+		if _auto_thunder_t <= 0.0:
+			_auto_thunder_t = 10.0 / mod("auto_thunder")
+			for e in enemies.random_enemies(6):
+				fx.lightning([e.pos + Vector3(0, 26, 0), enemies.enemy_center(e)], Color(0.7, 0.8, 1.0), 0.6)
+				enemies.damage(e, 150.0 * spells.power(), "lightning", true, "blessing")
+	if mod("wall_slow") > 0.0:
+		for e in enemies.enemies:
+			if e.alive and e.pos.z > -9.0:
+				enemies.apply_slow(e, mod("wall_slow"), 0.5)
 
 
 func _update_camera(delta: float) -> void:
 	_shake = maxf(0.0, _shake - delta * 2.5)
 	var look := Vector3(0, 0, _cam_look_z)
-	var offset := Vector3(0, 36.0, 34.0) * _cam_zoom
+	var offset := Vector3(0, 38.0, 31.0) * _cam_zoom
+	var cine := bosses != null and bosses.is_cinematic()
+	_cine_blend = move_toward(_cine_blend, 1.0 if cine else 0.0, delta / maxf(Engine.time_scale, 0.05) * 1.8)
+	if _cine_blend > 0.0 and bosses.cinematic_target != null:
+		var bp: Vector3 = bosses.cinematic_target.pos
+		var t := smoothstep(0.0, 1.0, _cine_blend)
+		look = look.lerp(bp + Vector3(0, 3.0, 0), t)
+		offset = offset.lerp(Vector3(6.0, 9.0, 16.0), t)
 	var pos := look + offset
 	if _shake > 0.0:
 		pos += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * 0.6
@@ -148,6 +281,14 @@ func _update_camera(delta: float) -> void:
 
 func shake(amount: float) -> void:
 	_shake = clampf(maxf(_shake, amount), 0.0, 1.2)
+
+
+func flash_screen(color: Color, duration: float) -> void:
+	hud.flash(color, duration)
+
+
+func banner_world(text: String, color: Color) -> void:
+	fx.banner_text(text, color)
 
 
 func castle_cast_point() -> Vector3:
@@ -205,7 +346,6 @@ func ground_point(screen: Vector2) -> Vector3:
 	var d := camera.project_ray_normal(screen)
 	if absf(d.y) < 0.0001:
 		return Vector3.INF
-	# intersect y = 0 then refine once against terrain height
 	var t := -o.y / d.y
 	var p := o + d * t
 	var h := world.height_at(p.x, p.z)
@@ -220,6 +360,11 @@ func _tap(screen: Vector2) -> void:
 			spells.cast(armed_spell, p)
 			if not GameState.is_god("no_cooldowns"):
 				arm_spell("")
+		return
+	if placing_defense != "":
+		var gp0 := ground_point(screen)
+		if gp0 != Vector3.INF:
+			place_defense(placing_defense, gp0)
 		return
 	# pads/towers are picked in screen space (they sit at different heights)
 	var best := -1
@@ -236,13 +381,17 @@ func _tap(screen: Vector2) -> void:
 	if best >= 0:
 		select_pad(best)
 		return
-	# manual targeting: tap an enemy to focus fire
 	var gp := ground_point(screen)
 	if gp != Vector3.INF:
+		var def := defenses.defense_at(gp)
+		if def != null:
+			select_defense(def)
+			return
+		# manual targeting: tap an enemy to focus fire
 		var e := enemies.find_nearest(gp, 3.0)
 		if e != null:
 			focus_target = e
-			hud.show_hint("Towers focusing fire on " + String(GameData.ENEMIES[e.type]["name"]))
+			hud.show_hint("All towers and heroes focus " + String(GameData.ENEMIES[e.type]["name"]))
 			fx.hit_spark(enemies.enemy_center(e), Color(1, 0.3, 0.2))
 			return
 	deselect()
@@ -252,7 +401,71 @@ func arm_spell(id: String) -> void:
 	armed_spell = id
 	if id != "":
 		deselect()
+		placing_defense = ""
 	hud.set_armed_spell(id)
+
+
+func cast_hero(i: int) -> void:
+	if i >= 0 and i < heroes.size():
+		heroes[i].cast_ability()
+
+
+# ------------------------------------------------------------------ defenses
+
+func begin_placing(type: String) -> void:
+	deselect()
+	arm_spell("")
+	placing_defense = type
+	hud.show_hint("Tap the battlefield to place " + String(GameData.DEFENSES[type]["name"]) + "  (tap Build again to stop)")
+
+
+func stop_placing() -> void:
+	placing_defense = ""
+	hud.show_hint("")
+
+
+func place_defense(type: String, p: Vector3) -> DefenseSystem.Defense:
+	if not defenses.can_place(p):
+		hud.show_hint("Can't build there")
+		return null
+	if not _pay(defenses.cost(type)):
+		return null
+	return defenses.place(type, p)
+
+
+func select_defense(d: DefenseSystem.Defense) -> void:
+	deselect()
+	selected_defense = d
+	hud.show_defense_sheet(d)
+
+
+func upgrade_defense() -> void:
+	var d := selected_defense
+	if d == null or d.level >= GameData.DEFENSE_MAX_LEVEL:
+		return
+	if not GameState.is_god("free_upgrades") and not _pay(defenses.cost(d.type, d.level + 1)):
+		return
+	defenses.upgrade(d)
+	select_defense(d)
+
+
+func max_defense() -> void:
+	var d := selected_defense
+	if d == null:
+		return
+	while d.level < GameData.DEFENSE_MAX_LEVEL:
+		defenses.upgrade(d)
+	select_defense(d)
+
+
+func sell_defense() -> void:
+	var d := selected_defense
+	if d == null:
+		return
+	if not GameState.has_unlimited_resources():
+		gold += int(d.spent * 0.6)
+	defenses.remove(d, true)
+	deselect()
 
 
 # ------------------------------------------------------------------ towers
@@ -274,11 +487,12 @@ func deselect() -> void:
 		if t != null:
 			(t as Tower).show_range(false)
 	selected_pad = -1
+	selected_defense = null
 	hud.close_sheet()
 
 
 func _pay(cost: int) -> bool:
-	if GameState.has_unlimited_resources():
+	if GameState.has_unlimited_resources() or cost <= 0:
 		return true
 	if gold < cost:
 		hud.show_hint("Not enough gold")
@@ -296,7 +510,7 @@ func build_tower(pad_index: int, type: String, level := 1, reselect := true) -> 
 		return null
 	var t := Tower.new()
 	add_child(t)
-	t.global_position = pad["pos"] + Vector3(0, 0.2, 0)
+	t.global_position = pad["pos"] + Vector3(0, 0.15, 0)
 	t.setup(type, level, self)
 	t.total_spent = cost
 	pad["tower"] = t
@@ -363,28 +577,62 @@ func _on_wave_started(w: int, is_boss: bool) -> void:
 
 
 func _on_wave_cleared(w: int) -> void:
-	if not game_over:
-		var bonus := 25 + w * 5
-		if not GameState.has_unlimited_resources():
-			gold += bonus
-		hud.show_hint("Wave %d cleared!  +%d gold" % [w, bonus])
+	if game_over:
+		return
+	var bonus := 25 + w * 5
+	if not GameState.has_unlimited_resources():
+		gold += bonus
+	run.gold_earned += bonus
+	hud.show_hint("Wave %d cleared!  +%d gold" % [w, bonus])
+	var every := 1 if mode == "playground" else GameData.BLESSING_EVERY
+	if w % every == 0 and not GameState.is_god("auto_complete_waves"):
+		offer_blessing()
+
+
+func offer_blessing() -> void:
+	get_tree().paused = true
+	hud.show_blessing_picker(run.offer(3))
+
+
+func pick_blessing(id: String) -> void:
+	var new_combos := run.add_blessing(id)
+	if id == "fortify":
+		_apply_castle_stats()
+		castle.repair_full()
+		for d in defenses.defenses:
+			if d.max_hp > 1.0:
+				d.max_hp = defenses.max_hp_for(d.type, d.level)
+				d.hp = d.max_hp
+	get_tree().paused = false
+	hud.hide_modal()
+	hud.banner(String(GameData.BLESSINGS[id]["name"]).to_upper(), Color(0.7, 1.0, 0.7))
+	for c in new_combos:
+		hud.combo_toast(c)
+		fx.banner_text("COMBO: " + String(GameData.COMBOS[c]["name"]), Color(1.0, 0.8, 0.3))
 
 
 func _on_enemy_killed(e: EnemyManager.Enemy) -> void:
 	kills += 1
+	var reward := int(e.reward * (1.0 + GameState.upgrade_value("kill_gold") + mod("gold") + (0.5 if _hero_effects.has("midas") else 0.0)))
 	if not GameState.has_unlimited_resources():
-		gold += e.reward
+		gold += reward
+	run.gold_earned += reward
 	if e == focus_target:
 		focus_target = null
 		_focus_marker.visible = false
+	loot.on_kill(e)
+	if _hero_effects.has("reap") and randf() < 0.2 and enemies.allies.size() < 30:
+		enemies.spawn_ally(e.pos, 40.0, 8.0)
+	if has_combo("divine_storm") and e.burn_t <= 0.0 and randf() < 0.3:
+		castle.heal(castle.max_hp * 0.002)
 	if e.boss:
 		shake(1.0)
+		run.gems_earned += 5
+		run.materials_earned += 3
 		hud.banner("TYRANT SLAIN!", Color(1, 0.85, 0.3))
-		hud.show_hint("Loot: +%d gold, +3 gems, +1 legendary material" % e.reward)
-		if not GameState.has_unlimited_resources():
-			GameState.currencies["gems"] = int(GameState.currencies["gems"]) + 3
-			GameState.currencies["materials"] = int(GameState.currencies["materials"]) + 1
-			GameState.save_state()
+		flash_screen(Color(1, 0.9, 0.6), 0.4)
+	elif e.elite != "":
+		run.materials_earned += 1
 
 
 func _on_castle_hit(dmg: float, pos: Vector3) -> void:
@@ -393,11 +641,20 @@ func _on_castle_hit(dmg: float, pos: Vector3) -> void:
 		shake(0.4)
 
 
+func _on_ranged_attack(e: EnemyManager.Enemy) -> void:
+	var kind: String = GameData.ENEMIES[e.type].get("projectile", "enemy_arrow")
+	if kind == "arrow":
+		kind = "enemy_arrow"
+	var target := Vector3(clampf(e.pos.x, -14, 14), randf_range(1.5, 3.2), -1.4)
+	var dmg := e.damage
+	projectiles.fire(kind, enemies.enemy_center(e), null, 30.0, 2.5 if kind == "enemy_arrow" else 1.0, func(p: Vector3, _t):
+		castle.take_damage(dmg, p)
+		fx.hit_spark(p, Color(0.8, 0.4, 1.0) if kind == "hex" else Color(0.9, 0.8, 0.6)), target)
+
+
 func _on_boss_spawned(e: EnemyManager.Enemy) -> void:
 	current_boss = e
-	shake(0.5)
-	hud.banner(String(GameData.ENEMIES[e.type]["name"]).get_slice(",", 0).to_upper() + " APPROACHES", Color(1, 0.35, 0.25))
-	fx.flash_light(Vector3(0, 10, -60), Models.enemy_glow(e.type), 8.0, 50.0, 1.5)
+	bosses.on_boss(e)
 
 
 func _on_castle_destroyed() -> void:
@@ -406,12 +663,35 @@ func _on_castle_destroyed() -> void:
 	game_over = true
 	GameState.record_wave(mode, waves.wave)
 	fx.explosion(Vector3(0, 4, 0), 8.0, Color(1, 0.5, 0.2), true)
-	hud.show_result(false, waves.wave - 1)
+	_finish(false)
 
 
 func _on_victory() -> void:
 	game_over = true
-	hud.show_result(true, waves.wave)
+	_finish(true)
+
+
+func _finish(victory: bool) -> void:
+	var summary := apply_rewards(victory)
+	hud.show_result(victory, waves.wave if victory else maxi(waves.wave - 1, 0), summary)
+
+
+func apply_rewards(victory: bool) -> Dictionary:
+	## Converts the run into permanent progression (gold, gems, materials, hero XP).
+	if rewards_applied:
+		return {}
+	rewards_applied = true
+	var waves_done := maxi(waves.wave - (0 if victory else 1), 0)
+	var xp := int((kills * 2 + waves_done * 25) * (1.0 + GameState.upgrade_value("hero_xp")))
+	var levels := {}
+	for h in heroes:
+		levels[h.id] = GameState.add_hero_xp(h.id, xp)
+	GameState.add_currency("gold", run.gold_earned)
+	GameState.add_currency("gems", run.gems_earned + (10 if victory else 0))
+	GameState.add_currency("materials", run.materials_earned)
+	GameState.save_state()
+	return {"gold": run.gold_earned, "gems": run.gems_earned + (10 if victory else 0), "materials": run.materials_earned,
+		"xp": xp, "levels": levels, "items": run.loot_found, "kills": kills}
 
 
 func toggle_pause() -> void:
@@ -424,6 +704,7 @@ func toggle_pause() -> void:
 
 
 func exit_to_menu() -> void:
+	apply_rewards(false)
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
@@ -453,8 +734,8 @@ func god_spawn_army(type: String, count: int) -> void:
 		waves.spawn_army(type, count)
 
 
-func god_spawn_boss() -> void:
-	var b: String = GameData.BOSS_TYPES[randi() % GameData.BOSS_TYPES.size()]
+func god_spawn_boss(type := "") -> void:
+	var b: String = type if type != "" else GameData.BOSS_TYPES[randi() % GameData.BOSS_TYPES.size()]
 	enemies.spawn(b, 1)
 
 
@@ -462,6 +743,9 @@ func god_max_towers() -> void:
 	for p in castle.pads:
 		if p["tower"] != null and (p["tower"] as Tower).level < GameData.TOWER_MAX_LEVEL:
 			(p["tower"] as Tower).set_level(GameData.TOWER_MAX_LEVEL)
+	for d in defenses.defenses:
+		while d.level < GameData.DEFENSE_MAX_LEVEL:
+			defenses.upgrade(d)
 	if selected_pad >= 0:
 		select_pad(selected_pad)
 
@@ -471,11 +755,41 @@ func god_fill_pads() -> void:
 	for idx in castle.pads.size():
 		if castle.pads[idx]["tower"] == null:
 			var type: String = GameData.TOWER_ORDER[i % GameData.TOWER_ORDER.size()]
-			var prev_unlimited: bool = GameState.god["unlimited"]
 			var t := build_tower(idx, type, GameData.TOWER_MAX_LEVEL, false)
-			if t == null and not prev_unlimited:
+			if t == null:
 				break
 			i += 1
+
+
+func god_build_defenses() -> void:
+	## Lines the lanes with max-level traps and barriers.
+	var spots := [
+		["barrier", Vector3(-8, 0, -30)], ["barrier", Vector3(8, 0, -30)], ["wall", Vector3(0, 0, -34)],
+		["spike_trap", Vector3(-8, 0, -40)], ["spike_trap", Vector3(8, 0, -40)], ["spike_trap", Vector3(0, 0, -44)],
+		["barrel_trap", Vector3(-4, 0, -50)], ["barrel_trap", Vector3(4, 0, -50)],
+		["frost_rune", Vector3(-8, 0, -20)], ["frost_rune", Vector3(8, 0, -20)], ["frost_rune", Vector3(0, 0, -24)],
+	]
+	for s in spots:
+		var p: Vector3 = s[1]
+		p.x = WorldBuilder.lane_x(int(round((p.x + 8.0) / 8.0)), p.z)
+		if defenses.can_place(p):
+			var d := defenses.place(s[0], p, 1)
+			while d.level < GameData.DEFENSE_MAX_LEVEL:
+				defenses.upgrade(d)
+
+
+func god_blessing() -> void:
+	offer_blessing()
+
+
+func god_all_blessings() -> void:
+	for id in GameData.BLESSINGS:
+		if not run.picks.has(id):
+			for c in run.add_blessing(id):
+				hud.combo_toast(c)
+	_apply_castle_stats()
+	castle.repair_full()
+	hud.banner("ALL BLESSINGS", Color(0.7, 1.0, 0.7))
 
 
 func god_reset() -> void:

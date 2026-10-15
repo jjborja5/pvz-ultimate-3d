@@ -1,21 +1,28 @@
 class_name EnemyManager
 extends Node3D
-## Data-oriented horde simulation. Enemies are plain objects updated in one loop and
-## rendered through one MultiMesh per enemy type (one draw call per type), with limb
-## animation done on the GPU (shaders/unit.gdshader). Handles hundreds of enemies.
+## Data-oriented horde simulation + rendering.
+## Units are plain objects updated in one loop. They are drawn with rigged CC0 KayKit
+## characters whose walk / attack / death animations were baked into frame meshes by
+## UnitBaker; one MultiMesh per (unit type, animation, frame, LOD) draws every unit in
+## that pose with a single draw call. Also hosts spectral allies and lane blockers.
 
 signal enemy_killed(enemy: Enemy)
 signal castle_hit(damage: float, pos: Vector3)
 signal boss_spawned(enemy: Enemy)
+signal ranged_attack(enemy: Enemy)
+signal blocker_hit(blocker: Object, damage: float, enemy: Enemy)
 
-const CAPACITY := 900
 const HPBAR_CAPACITY := 600
 const FLOATS_PER_INSTANCE := 16  # 12 transform + 4 custom
-const UNIT_SCALE := 1.35        # global readability scale for the top-down camera
+const UNIT_SCALE := 1.2          # readability scale for the elevated camera
+const DEATH_TIME := 0.7
+const CORPSE_TIME := 1.6
+const ALLY_TYPE := "ally_skeleton"
 
 class Enemy:
 	extends RefCounted
 	var type := ""
+	var model := ""
 	var hp := 1.0
 	var max_hp := 1.0
 	var speed := 1.0
@@ -24,58 +31,67 @@ class Enemy:
 	var scale := 1.0
 	var attack_rate := 1.0
 	var reward := 1
+	var armor := 0.0
+	var ranged := 0.0
 	var boss := false
+	var elite := ""
+	var aura := 0.0          # encoded aura hue (+1) for elites
 	var lane := 0
 	var offset := 0.0
 	var pos := Vector3.ZERO
 	var heading := 0.0
 	var alive := true
 	var attacking := false
+	var blocked_by: Object = null
 	var atk_cd := 0.0
 	var slow := 0.0
 	var slow_t := 0.0
 	var frozen_t := 0.0
 	var burn_dps := 0.0
 	var burn_t := 0.0
-	var anim := 0.0
+	var poison_dps := 0.0
+	var poison_t := 0.0
+	var immune_t := 0.0
+	var haste_t := 0.0
+	var ability_t := 0.0
+	var anim_t := 0.0
+	var death_t := 0.0
 	var flash := 0.0
+	var ally := false
+	var life := 0.0
+	var target: Enemy = null
 
 var world: WorldBuilder
 var fx: FX
 var enemies: Array[Enemy] = []
+var allies: Array[Enemy] = []
+var blockers: Array = []          # objects with: x, z, half_width, alive, func take_damage(d)
 var hp_mult := 1.0
-var _mm := {}        # type -> MultiMesh
+var attack_line_z := -2.6
+var lod_z := -44.0
+var damage_modifier: Callable     # (e, amount, element, source) -> float, set by battle
+var kill_hooks: Array[Callable] = []
+
+var _dying: Array[Enemy] = []
+var _mmi := {}                   # "type|anim|frame|lod" -> MultiMeshInstance3D
+var _mats := {}
+var _frames := {}                # model -> baked frames dictionary
 var _hp_mm: MultiMesh
 var _rng := RandomNumberGenerator.new()
 var _number_throttle := 0.0
-var attack_line_z := -2.6
+var _shader: Shader
 
 
 func setup(p_world: WorldBuilder, p_fx: FX) -> void:
 	world = p_world
 	fx = p_fx
 	_rng.randomize()
-	var shader: Shader = load("res://shaders/unit.gdshader")
+	_shader = load("res://shaders/unit_tex.gdshader")
 	for type in GameData.ENEMIES:
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_custom_data = true
-		mm.mesh = Models.get_enemy(type)
-		mm.instance_count = CAPACITY if not GameData.ENEMIES[type].get("boss", false) else 16
-		mm.visible_instance_count = 0
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		var mat := ShaderMaterial.new()
-		mat.shader = shader
-		mat.set_shader_parameter("glow_color", Models.enemy_glow(type))
-		if type == "boss_lich":
-			mat.set_shader_parameter("stride", 0.15)
-		mmi.material_override = mat
-		mmi.custom_aabb = AABB(Vector3(-80, -10, -160), Vector3(160, 60, 220))
-		mmi.name = "Horde_" + type
-		add_child(mmi)
-		_mm[type] = mm
-	# health bars
+		var model: String = GameData.ENEMIES[type]["model"]
+		if not _frames.has(model):
+			_frames[model] = UnitBaker.get_frames(model)
+	_frames["skel_warrior"] = UnitBaker.get_frames("skel_warrior")
 	_hp_mm = MultiMesh.new()
 	_hp_mm.transform_format = MultiMesh.TRANSFORM_3D
 	_hp_mm.use_custom_data = true
@@ -94,28 +110,81 @@ func setup(p_world: WorldBuilder, p_fx: FX) -> void:
 	add_child(hpi)
 
 
+func _material(type: String) -> ShaderMaterial:
+	if _mats.has(type):
+		return _mats[type]
+	var m := ShaderMaterial.new()
+	m.shader = _shader
+	if type == ALLY_TYPE:
+		m.set_shader_parameter("atlas", _frames["skel_warrior"]["texture"])
+		m.set_shader_parameter("ghost", 1.0)
+	else:
+		var def: Dictionary = GameData.ENEMIES[type]
+		m.set_shader_parameter("atlas", _frames[def["model"]]["texture"])
+		m.set_shader_parameter("tint", def.get("tint", Color.WHITE))
+		m.set_shader_parameter("tint_amount", def.get("tint_amount", 0.0))
+		m.set_shader_parameter("glow_color", def.get("glow", Color(1, 0.4, 0.1)))
+		m.set_shader_parameter("emissive_body", def.get("emissive", 0.0))
+	_mats[type] = m
+	return m
+
+
+func _mmi_for(type: String, model: String, anim: String, frame: int, lo: bool) -> MultiMeshInstance3D:
+	var key := "%s|%s|%d|%d" % [type, anim, frame, 1 if lo else 0]
+	if _mmi.has(key):
+		return _mmi[key]
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	var frames: Array = _frames[model][anim + ("_lo" if lo else "")]
+	mm.mesh = frames[frame]
+	mm.instance_count = 0
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = _material(type)
+	mmi.custom_aabb = AABB(Vector3(-80, -10, -160), Vector3(160, 60, 220))
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if lo else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(mmi)
+	_mmi[key] = mmi
+	return mmi
+
+
 # ------------------------------------------------------------------ spawning
 
-func spawn(type: String, lane := -1, z := WorldBuilder.SPAWN_Z, hp_scale := 1.0) -> Enemy:
+func spawn(type: String, lane := -1, z := WorldBuilder.SPAWN_Z, hp_scale := 1.0, elite := "") -> Enemy:
 	if not GameData.ENEMIES.has(type):
 		return null
 	var def: Dictionary = GameData.ENEMIES[type]
-	if count_type(type) >= _mm[type].instance_count:
+	if enemies.size() >= 1500:
 		return null
 	var e := Enemy.new()
 	e.type = type
+	e.model = def["model"]
 	e.boss = def.get("boss", false)
 	e.max_hp = float(def["hp"]) * hp_mult * hp_scale
-	e.hp = e.max_hp
 	e.speed = float(def["speed"]) * _rng.randf_range(0.9, 1.1)
 	e.damage = def["damage"]
 	e.radius = float(def["radius"]) * UNIT_SCALE
 	e.scale = float(def["scale"]) * UNIT_SCALE * _rng.randf_range(0.95, 1.05)
 	e.attack_rate = def["attack_rate"]
 	e.reward = def["reward"]
+	e.armor = def.get("armor", 0.0)
+	e.ranged = def.get("ranged", 0.0)
+	if elite != "" and GameData.ELITES.has(elite) and not e.boss:
+		var ed: Dictionary = GameData.ELITES[elite]
+		e.elite = elite
+		e.max_hp *= ed["hp"]
+		e.scale *= ed["scale"]
+		e.radius *= ed["scale"]
+		e.speed *= ed["speed"]
+		e.armor = maxf(e.armor, ed.get("armor", 0.0))
+		e.reward *= 4
+		e.aura = 1.0 + (ed["aura"] as Color).h
+	e.hp = e.max_hp
 	e.lane = lane if lane >= 0 else _rng.randi_range(0, WorldBuilder.LANE_COUNT - 1)
 	e.offset = 0.0 if e.boss else _rng.randf_range(-2.6, 2.6)
-	e.anim = _rng.randf() * TAU
+	e.anim_t = _rng.randf() * 3.0
+	e.ability_t = 6.0
 	var x := WorldBuilder.lane_x(e.lane, z) + e.offset
 	e.pos = Vector3(x, world.height_at(x, z), z - _rng.randf_range(0.0, 3.0))
 	enemies.append(e)
@@ -124,10 +193,28 @@ func spawn(type: String, lane := -1, z := WorldBuilder.SPAWN_Z, hp_scale := 1.0)
 	return e
 
 
+func spawn_ally(pos: Vector3, dps: float, life := 10.0) -> Enemy:
+	var a := Enemy.new()
+	a.type = ALLY_TYPE
+	a.model = "skel_warrior"
+	a.ally = true
+	a.pos = pos
+	a.speed = 5.0
+	a.damage = dps
+	a.scale = 1.15 * UNIT_SCALE
+	a.radius = 0.6
+	a.life = life
+	a.heading = PI
+	a.anim_t = _rng.randf()
+	allies.append(a)
+	fx.soul_puff(pos, Color(0.3, 1.0, 1.0))
+	return a
+
+
 func count_type(type: String) -> int:
 	var n := 0
 	for e in enemies:
-		if e.type == type:
+		if e.type == type and e.alive:
 			n += 1
 	return n
 
@@ -144,7 +231,6 @@ func alive_count() -> int:
 
 func _process(delta: float) -> void:
 	_number_throttle = maxf(0.0, _number_throttle - delta)
-	var invincible := GameState.is_god("invincible")
 	var field := WorldBuilder.FIELD_HALF - 1.0
 	var any_dead := false
 	for e in enemies:
@@ -152,133 +238,280 @@ func _process(delta: float) -> void:
 			any_dead = true
 			continue
 		e.flash = maxf(0.0, e.flash - delta * 5.0)
-		# status effects
+		e.immune_t = maxf(0.0, e.immune_t - delta)
+		e.haste_t = maxf(0.0, e.haste_t - delta)
 		if e.burn_t > 0.0:
 			e.burn_t -= delta
-			_apply_damage(e, e.burn_dps * delta, false)
-			if not e.alive:
-				any_dead = true
-				continue
+			_apply_damage(e, e.burn_dps * delta, "fire", false, "burn")
+		if e.poison_t > 0.0 and e.alive:
+			e.poison_t -= delta
+			_apply_damage(e, e.poison_dps * delta, "nature", false, "poison")
+		if not e.alive:
+			any_dead = true
+			continue
 		if e.slow_t > 0.0:
 			e.slow_t -= delta
 			if e.slow_t <= 0.0:
 				e.slow = 0.0
 		if e.frozen_t > 0.0:
 			e.frozen_t -= delta
-		var move_mult := 0.0 if e.frozen_t > 0.0 else (1.0 - e.slow)
+		var move_mult := 0.0 if e.frozen_t > 0.0 else (1.0 - e.slow) * (1.5 if e.haste_t > 0.0 else 1.0)
 		var line := attack_line_z - e.radius
+		if e.ranged > 0.0:
+			line = attack_line_z - e.ranged
+		# lane blockers (walls / barriers) hold the enemy in place
+		if e.blocked_by != null and not bool(e.blocked_by.get("alive")):
+			e.blocked_by = null
+			e.attacking = false
 		if not e.attacking:
 			var nz := minf(e.pos.z + e.speed * move_mult * delta, line)
 			var nx := clampf(WorldBuilder.lane_x(e.lane, nz) + e.offset, -field, field)
+			var b := _blocker_ahead(e, nz, nx)
+			if b != null:
+				nz = minf(nz, float(b.get("z")) - e.radius - 0.7)
+				e.blocked_by = b
 			var d := Vector2(nx - e.pos.x, nz - e.pos.z)
 			if d.length_squared() > 0.000001:
 				e.heading = lerp_angle(e.heading, atan2(d.x, d.y), minf(1.0, delta * 6.0))
 			e.pos = Vector3(nx, world.height_at(nx, nz), nz)
-			e.anim += delta * e.speed * move_mult * 3.2 / maxf(e.scale, 0.5)
-			if nz >= line:
+			e.anim_t += delta * move_mult * clampf(e.speed / 2.5, 0.6, 1.6) / maxf(e.scale * 0.8, 0.6)
+			if nz >= line or e.blocked_by != null:
 				e.attacking = true
 				e.atk_cd = _rng.randf_range(0.2, 1.0)
+				e.anim_t = 0.0
 		else:
 			e.heading = lerp_angle(e.heading, 0.0, minf(1.0, delta * 4.0))
-			e.anim += delta * 4.0 * move_mult
+			e.anim_t += delta * move_mult * e.attack_rate
 			e.atk_cd -= delta * move_mult
 			if e.atk_cd <= 0.0:
 				e.atk_cd = 1.0 / e.attack_rate
-				castle_hit.emit(0.0 if invincible else e.damage, e.pos)
+				if e.blocked_by != null:
+					blocker_hit.emit(e.blocked_by, e.damage, e)
+				elif e.ranged > 0.0:
+					ranged_attack.emit(e)
+				else:
+					castle_hit.emit(e.damage, e.pos)
 	if any_dead:
 		enemies = enemies.filter(func(x): return x.alive)
+	_update_allies(delta)
+	for c in _dying:
+		c.death_t += delta
+	_dying = _dying.filter(func(x): return x.death_t < CORPSE_TIME)
 	_render()
 
 
+func _blocker_ahead(e: Enemy, nz: float, nx: float) -> Object:
+	for b in blockers:
+		if not bool(b.get("alive")):
+			continue
+		var bz: float = b.get("z")
+		if e.pos.z < bz and nz + e.radius + 0.7 >= bz and absf(nx - float(b.get("x"))) < float(b.get("half_width")) + e.radius * 0.5:
+			return b
+	return null
+
+
+func _update_allies(delta: float) -> void:
+	var gone := false
+	for a in allies:
+		a.life -= delta
+		if a.life <= 0.0:
+			a.alive = false
+			gone = true
+			fx.soul_puff(a.pos, Color(0.3, 1.0, 1.0))
+			continue
+		if a.target == null or not a.target.alive:
+			a.target = find_nearest(a.pos, 40.0)
+		if a.target == null:
+			a.attacking = false
+			a.anim_t += delta
+			continue
+		var to := Vector2(a.target.pos.x - a.pos.x, a.target.pos.z - a.pos.z)
+		var dist := to.length()
+		a.heading = lerp_angle(a.heading, atan2(to.x, to.y), minf(1.0, delta * 8.0))
+		if dist > a.target.radius + a.radius + 0.4:
+			a.attacking = false
+			var step := to.normalized() * a.speed * delta
+			var nx := a.pos.x + step.x
+			var nz := a.pos.y + 0.0
+			nz = a.pos.z + step.y
+			a.pos = Vector3(nx, world.height_at(nx, nz), nz)
+			a.anim_t += delta * 1.6
+		else:
+			if not a.attacking:
+				a.anim_t = 0.0
+			a.attacking = true
+			a.anim_t += delta * 1.3
+			_apply_damage(a.target, a.damage * delta, "shadow", false, "ally")
+	if gone:
+		allies = allies.filter(func(x): return x.alive)
+
+
 func _render() -> void:
-	var groups := {}
-	for type in _mm:
-		groups[type] = []
+	# bucket units by (type, anim, frame, lod)
+	var buckets := {}
 	for e in enemies:
-		groups[e.type].append(e)
+		_bucket(buckets, e)
+	for e in allies:
+		_bucket(buckets, e)
+	for e in _dying:
+		_bucket(buckets, e)
+	var used := {}
 	var hp_buf := PackedFloat32Array()
 	var hp_n := 0
-	for type in _mm:
-		var mm: MultiMesh = _mm[type]
-		var list: Array = groups[type]
-		var n := mini(list.size(), mm.instance_count)
-		if n > 0:
-			var buf := PackedFloat32Array()
-			buf.resize(mm.instance_count * FLOATS_PER_INSTANCE)
-			var o := 0
-			for i in n:
-				var e: Enemy = list[i]
-				var s := e.scale
-				var c := cos(e.heading) * s
-				var sn := sin(e.heading) * s
-				# Y-rotation * uniform scale, row-major 3x4, then custom data.
-				buf[o] = c; buf[o + 1] = 0.0; buf[o + 2] = sn; buf[o + 3] = e.pos.x
-				buf[o + 4] = 0.0; buf[o + 5] = s; buf[o + 6] = 0.0; buf[o + 7] = e.pos.y
-				buf[o + 8] = -sn; buf[o + 9] = 0.0; buf[o + 10] = c; buf[o + 11] = e.pos.z
-				buf[o + 12] = e.anim
-				buf[o + 13] = e.flash
-				buf[o + 14] = 1.0 if e.frozen_t > 0.0 else minf(e.slow * 1.5, 0.8)
-				buf[o + 15] = 1.0 if e.attacking else 0.0
-				o += FLOATS_PER_INSTANCE
-				if e.hp < e.max_hp and not e.boss and hp_n < HPBAR_CAPACITY:
-					hp_buf.append_array([1.0, 0.0, 0.0, e.pos.x, 0.0, 1.0, 0.0, e.pos.y + 2.25 * e.scale, 0.0, 0.0, 1.0, e.pos.z,
-						e.hp / e.max_hp, clampf(e.scale, 0.8, 1.8), 0.0, 0.0])
-					hp_n += 1
-			mm.buffer = buf
+	for key in buckets:
+		var list: Array = buckets[key]
+		var e0: Enemy = list[0]
+		var parts: PackedStringArray = (key as String).split("|")
+		var mmi := _mmi_for(e0.type, e0.model, parts[1], int(parts[2]), parts[3] == "1")
+		var mm := mmi.multimesh
+		var n := list.size()
+		if mm.instance_count < n:
+			mm.instance_count = int(ceil(n * 1.5 / 16.0)) * 16
+		var buf := PackedFloat32Array()
+		buf.resize(mm.instance_count * FLOATS_PER_INSTANCE)
+		var o := 0
+		for e: Enemy in list:
+			var s := e.scale
+			var c := cos(e.heading) * s
+			var sn := sin(e.heading) * s
+			var y := e.pos.y
+			if e.death_t > DEATH_TIME:
+				y -= (e.death_t - DEATH_TIME) * 1.2 * s
+			buf[o] = c; buf[o + 1] = 0.0; buf[o + 2] = sn; buf[o + 3] = e.pos.x
+			buf[o + 4] = 0.0; buf[o + 5] = s; buf[o + 6] = 0.0; buf[o + 7] = y
+			buf[o + 8] = -sn; buf[o + 9] = 0.0; buf[o + 10] = c; buf[o + 11] = e.pos.z
+			buf[o + 12] = e.flash
+			buf[o + 13] = 1.0 if e.frozen_t > 0.0 else minf(e.slow * 1.5, 0.8)
+			buf[o + 14] = 1.0 if e.burn_t > 0.0 else 0.0
+			buf[o + 15] = e.aura + (2.5 if e.immune_t > 0.0 else 0.0)
+			o += FLOATS_PER_INSTANCE
+			if e.alive and not e.ally and e.hp < e.max_hp and not e.boss and hp_n < HPBAR_CAPACITY:
+				hp_buf.append_array([1.0, 0.0, 0.0, e.pos.x, 0.0, 1.0, 0.0, e.pos.y + 2.6 * e.scale, 0.0, 0.0, 1.0, e.pos.z,
+					e.hp / e.max_hp, clampf(e.scale, 0.8, 1.8), 0.0, 0.0])
+				hp_n += 1
+		mm.buffer = buf
 		mm.visible_instance_count = n
+		used[mmi] = true
+	for key in _mmi:
+		var mmi: MultiMeshInstance3D = _mmi[key]
+		if not used.has(mmi):
+			mmi.multimesh.visible_instance_count = 0
 	if hp_n > 0:
 		hp_buf.resize(HPBAR_CAPACITY * FLOATS_PER_INSTANCE)
 		_hp_mm.buffer = hp_buf
 	_hp_mm.visible_instance_count = hp_n
 
 
+func _bucket(buckets: Dictionary, e: Enemy) -> void:
+	var frames: Dictionary = _frames[e.model]
+	var anim := "walk"
+	var frame := 0
+	if not e.alive and not e.ally:
+		anim = "death"
+		var n: int = frames["death"].size()
+		frame = mini(int(e.death_t / DEATH_TIME * n), n - 1)
+	elif e.attacking:
+		anim = "attack"
+		var n2: int = frames["attack"].size()
+		frame = int(e.anim_t * n2) % n2
+	else:
+		var n3: int = frames["walk"].size()
+		frame = int(e.anim_t * n3 * 1.25) % n3
+	var lo := e.pos.z < lod_z and not e.boss
+	var key := "%s|%s|%d|%d" % [e.type, anim, frame, 1 if lo else 0]
+	if not buckets.has(key):
+		buckets[key] = []
+	buckets[key].append(e)
+
+
 # ------------------------------------------------------------------ combat API
 
-func damage(e: Enemy, amount: float, show_number := true) -> void:
-	_apply_damage(e, amount, show_number)
+func damage(e: Enemy, amount: float, element := "physical", show_number := true, source := "") -> void:
+	_apply_damage(e, amount, element, show_number, source)
 
 
-func _apply_damage(e: Enemy, amount: float, show_number: bool) -> void:
+func _apply_damage(e: Enemy, amount: float, element: String, show_number: bool, source: String) -> void:
 	if not e.alive:
 		return
+	if e.immune_t > 0.0 and source != "god":
+		return
+	if damage_modifier.is_valid():
+		amount = damage_modifier.call(e, amount, element, source)
+	if e.armor > 0.0 and source != "god":
+		amount *= 1.0 - (e.armor if element == "physical" else e.armor * 0.5)
 	if GameState.is_god("one_hit_kill"):
 		amount = e.hp + 1.0
 	e.hp -= amount
 	if show_number:
 		e.flash = 1.0
 		if _number_throttle <= 0.0 or e.boss:
-			fx.damage_number(e.pos + Vector3(0, e.scale, 0), amount, Color(1, 0.95, 0.6) if amount < 200 else Color(1, 0.5, 0.2))
+			fx.damage_number(e.pos + Vector3(0, e.scale, 0), amount, _element_color(element) if amount < 400 else Color(1, 0.5, 0.2))
 			_number_throttle = 0.03
 	if e.hp <= 0.0:
-		e.alive = false
-		fx.soul_puff(e.pos, Models.enemy_glow(e.type))
-		if e.boss:
-			fx.explosion(e.pos + Vector3(0, 2, 0), 6.0, Models.enemy_glow(e.type), true)
-		enemy_killed.emit(e)
+		_kill(e)
 
 
-func damage_radius(center: Vector3, radius: float, amount: float, falloff := true) -> int:
+func _kill(e: Enemy) -> void:
+	e.alive = false
+	e.attacking = false
+	e.death_t = 0.0
+	_dying.append(e)
+	var def: Dictionary = GameData.ENEMIES[e.type]
+	fx.soul_puff(e.pos, def.get("glow", Color(1, 0.5, 0.1)))
+	if e.boss:
+		fx.explosion(e.pos + Vector3(0, 2, 0), 6.0, def.get("glow", Color(1, 0.5, 0.1)), true)
+	enemy_killed.emit(e)
+	for h in kill_hooks:
+		h.call(e)
+
+
+func _element_color(el: String) -> Color:
+	match el:
+		"fire": return Color(1.0, 0.6, 0.25)
+		"ice": return Color(0.6, 0.9, 1.0)
+		"lightning": return Color(0.75, 0.8, 1.0)
+		"holy": return Color(1.0, 0.95, 0.5)
+		"nature": return Color(0.6, 1.0, 0.4)
+		"shadow": return Color(0.8, 0.5, 1.0)
+	return Color(1, 0.95, 0.6)
+
+
+func damage_radius(center: Vector3, radius: float, amount: float, element := "physical", falloff := true, source := "") -> int:
 	var hits := 0
-	var r2 := radius * radius
-	for e in enemies:
+	for e: Enemy in enemies.duplicate():
 		if not e.alive:
 			continue
 		var d2 := Vector2(e.pos.x - center.x, e.pos.z - center.z).length_squared()
-		var rr := r2 + e.radius * e.radius * 2.0
-		if d2 <= rr:
-			var f := 1.0 - (sqrt(d2) / (radius + e.radius)) * 0.5 if falloff else 1.0
-			_apply_damage(e, amount * f, hits < 6)
+		var rr := radius + e.radius
+		if d2 <= rr * rr:
+			var f := 1.0 - (sqrt(d2) / rr) * 0.5 if falloff else 1.0
+			_apply_damage(e, amount * f, element, hits < 6, source)
 			hits += 1
 	return hits
 
 
 func enemies_in_radius(center: Vector3, radius: float) -> Array[Enemy]:
 	var out: Array[Enemy] = []
-	var r2 := radius * radius
 	for e in enemies:
-		if e.alive and Vector2(e.pos.x - center.x, e.pos.z - center.z).length_squared() <= r2:
+		var rr := radius + e.radius
+		if e.alive and Vector2(e.pos.x - center.x, e.pos.z - center.z).length_squared() <= rr * rr:
 			out.append(e)
 	return out
+
+
+func densest_point() -> Vector3:
+	## Rough crowd centre used by auto-meteors.
+	if enemies.is_empty():
+		return Vector3.INF
+	var best := enemies[0].pos
+	var best_n := -1
+	for i in mini(enemies.size(), 24):
+		var e: Enemy = enemies[_rng.randi_range(0, enemies.size() - 1)]
+		var n := enemies_in_radius(e.pos, 5.0).size()
+		if n > best_n:
+			best_n = n
+			best = e.pos
+	return best
 
 
 func find_target(from: Vector3, rng: float, exclude: Array = []) -> Enemy:
@@ -310,10 +543,19 @@ func find_nearest(from: Vector3, rng: float, exclude: Array = []) -> Enemy:
 	return best
 
 
+func random_enemies(n: int) -> Array[Enemy]:
+	var pool := enemies.filter(func(x): return x.alive)
+	pool.shuffle()
+	var out: Array[Enemy] = []
+	for i in mini(n, pool.size()):
+		out.append(pool[i])
+	return out
+
+
 func apply_slow(e: Enemy, amount: float, duration: float) -> void:
 	if e.boss:
 		amount *= 0.5
-	e.slow = maxf(e.slow, amount)
+	e.slow = clampf(maxf(e.slow, amount), 0.0, 0.85)
 	e.slow_t = maxf(e.slow_t, duration)
 
 
@@ -329,15 +571,23 @@ func apply_burn(e: Enemy, dps: float, duration: float) -> void:
 	e.burn_t = maxf(e.burn_t, duration)
 
 
+func apply_poison(e: Enemy, dps: float, duration: float) -> void:
+	e.poison_dps = maxf(e.poison_dps, dps)
+	e.poison_t = maxf(e.poison_t, duration)
+
+
 func kill_all() -> void:
-	for e in enemies.duplicate():
+	for e: Enemy in enemies.duplicate():
 		if e.alive:
-			_apply_damage(e, e.hp + 1e9, false)
+			e.immune_t = 0.0
+			_apply_damage(e, e.hp + 1e9, "physical", false, "god")
 	enemies = enemies.filter(func(x): return x.alive)
 
 
 func clear_all() -> void:
 	enemies.clear()
+	allies.clear()
+	_dying.clear()
 	_render()
 
 

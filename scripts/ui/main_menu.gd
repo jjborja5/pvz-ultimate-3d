@@ -15,6 +15,7 @@ var _currency_labels := {}
 
 func _ready() -> void:
 	get_tree().paused = false
+	await _bake_with_progress()
 	fx = FX.new()
 	add_child(fx)
 	world = WorldBuilder.new()
@@ -38,7 +39,52 @@ func _ready() -> void:
 	GameState.god_changed.connect(func(_k): _refresh_currencies())
 
 
+func _bake_with_progress() -> void:
+	## First launch: bake character animation frames with a progress screen (later launches
+	## load them from the user:// cache in a fraction of a second).
+	var pending: Array = UnitBaker.CONFIGS.keys().filter(func(c): return not UnitBaker.is_baked(c))
+	if pending.is_empty():
+		return
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	var bg := ColorRect.new()
+	bg.color = Color(0.06, 0.04, 0.1)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(bg)
+	var title := UITheme.title("CASTLE\nDOMINION", 84)
+	title.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	title.offset_left = -360
+	title.offset_right = 360
+	title.offset_top = -260
+	title.offset_bottom = -60
+	layer.add_child(title)
+	var lbl := UITheme.label("Forging the armies...", 26, UITheme.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	lbl.offset_left = -300
+	lbl.offset_right = 300
+	lbl.offset_top = 20
+	lbl.offset_bottom = 60
+	layer.add_child(lbl)
+	var bar := ProgressBar.new()
+	bar.theme = UITheme.get_theme()
+	bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	bar.offset_left = -260
+	bar.offset_right = 260
+	bar.offset_top = 80
+	bar.offset_bottom = 110
+	bar.max_value = pending.size()
+	bar.show_percentage = false
+	layer.add_child(bar)
+	for i in pending.size():
+		await get_tree().process_frame
+		UnitBaker.get_frames(pending[i])
+		bar.value = i + 1
+	layer.queue_free()
+
+
 func _process(delta: float) -> void:
+	if camera == null:
+		return
 	_t += delta
 	var a := sin(_t * 0.08) * 0.5
 	var target := Vector3(0, 4, -12)
@@ -52,7 +98,7 @@ func _process(delta: float) -> void:
 	for e in enemies.enemies:
 		if e.alive and e.attacking and randf() < 0.01:
 			fx.lightning([e.pos + Vector3(0, 25, 0), enemies.enemy_center(e)], Color(0.6, 0.8, 1.0), 0.4)
-			enemies.damage(e, 1e9, false)
+			enemies.damage(e, 1e9, "lightning", false, "god")
 
 
 # ------------------------------------------------------------------ UI
@@ -154,10 +200,10 @@ func _show_home() -> void:
 	grid.add_theme_constant_override("v_separation", 12)
 	v.add_child(grid)
 	var items := [
-		["Heroes", "swords", func(): _show_coming("Heroes", ["Archer", "Fire Mage", "Ice Wizard", "Lightning Sorcerer", "Paladin", "Druid", "Necromancer", "Dwarf Engineer", "Dragon Summoner"])],
-		["Equipment", "shield", func(): _show_coming("Equipment", ["Weapons, armour and relics per hero", "All items unlocked and max level in God Mode"])],
+		["Heroes", "swords", _show_heroes],
+		["Equipment", "shield", _show_equipment],
 		["Towers", "archer", _show_towers],
-		["Upgrades", "gem", func(): _show_coming("Upgrades", ["Permanent tower and castle upgrades", "Roguelike in-battle upgrade picks", "Skill combinations"])],
+		["Upgrades", "gem", _show_upgrades],
 		["Inventory", "gold", _show_inventory],
 		["World Map", "meteor", _show_world_map],
 		["God Mode", "crown", _open_god],
@@ -308,23 +354,12 @@ func _show_towers() -> void:
 		p.add_theme_stylebox_override("panel", UITheme.box(Color(0.12, 0.1, 0.2), UITheme.GOLD_DARK, 16, 2, 0))
 		p.add_child(row)
 		body.add_child(p)
-	body.add_child(UITheme.label("Planned (Phase 3): magical barriers, spike traps, explosive traps, defensive walls.", 20, Color(0.8, 0.8, 0.8)))
-
-
-func _show_inventory() -> void:
-	var body := _screen_frame("Inventory")
-	var names := {"gold": "Gold", "gems": "Gems", "diamonds": "Diamonds", "materials": "Upgrade Materials",
-		"energy": "Energy", "skill_points": "Skill Points", "summon_tickets": "Summon Tickets"}
-	for k in names:
-		var row := HBoxContainer.new()
-		var l := UITheme.label(names[k], 30)
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(l)
-		row.add_child(UITheme.label(GameState.currency_text(k), 34, UITheme.GOLD))
-		var p := PanelContainer.new()
-		p.add_theme_stylebox_override("panel", UITheme.box(Color(0.12, 0.1, 0.2), UITheme.GOLD_DARK, 16, 2, 0))
-		p.add_child(row)
-		body.add_child(p)
+	body.add_child(UITheme.label("BATTLEFIELD DEFENSES (built with the BUILD button in battle)", 22, UITheme.GOLD))
+	for type in GameData.DEFENSE_ORDER:
+		var dd: Dictionary = GameData.DEFENSES[type]
+		var lab := UITheme.label("%s — %s" % [dd["name"], dd["desc"]], 20, Color(0.88, 0.85, 0.8))
+		lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		body.add_child(lab)
 
 
 func _show_settings() -> void:
@@ -356,21 +391,369 @@ func _show_settings() -> void:
 	body.add_child(UITheme.label("Castle Dominion v%s  •  offline, no ads, no purchases" % ProjectSettings.get_setting("application/config/version"), 18, Color(0.7, 0.7, 0.7)))
 
 
-func _show_coming(title_text: String, lines: Array) -> void:
-	var body := _screen_frame(title_text)
-	var note := UITheme.label("Arrives in Phase 3. Everything will be unlocked and at max level while God Mode is on.", 22, Color(1, 0.9, 0.6))
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(note)
-	for l in lines:
-		var p := PanelContainer.new()
-		p.add_theme_stylebox_override("panel", UITheme.box(Color(0.12, 0.1, 0.2), UITheme.GOLD_DARK, 16, 2, 0))
-		var lab := UITheme.label(l, 26)
-		lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		p.add_child(lab)
-		body.add_child(p)
-
-
 func _open_god() -> void:
 	var gp := GodPanel.new()
 	gp.closed.connect(_show_home)
 	ui.add_child(gp)
+
+
+# ------------------------------------------------------------------ shared widgets
+
+var _sel_hero := "fire_mage"
+var _inv_filter := ""
+var _selected_uid := -1
+
+
+func _panel(parent: Control, bg := Color(0.12, 0.1, 0.2), border := UITheme.GOLD_DARK) -> VBoxContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UITheme.box(bg, border, 16, 2, 0))
+	parent.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	p.add_child(v)
+	return v
+
+
+func _wrap(text: String, size: int, color: Color) -> Label:
+	var l := UITheme.label(text, size, color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+
+func _god_note(parent: Control) -> void:
+	if GameState.is_god("enabled"):
+		var n := UITheme.label("GOD MODE: everything unlocked" + (", all levels at maximum" if GameState.is_god("max_power") else "") +
+			(", all costs free" if GameState.has_unlimited_resources() else ""), 18, Color(0.6, 1.0, 0.6))
+		n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		parent.add_child(n)
+
+
+func _item_card(parent: Control, it: Dictionary, on_tap: Callable, selected := false) -> void:
+	var col := Loot.rarity_color(it)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(0, 112)
+	b.add_theme_stylebox_override("normal", UITheme.box(Color(col.r * 0.16, col.g * 0.16, col.b * 0.2, 0.95), col if selected else col.darkened(0.3), 16, 3 if selected else 2, 0))
+	b.add_theme_stylebox_override("hover", UITheme.box(Color(col.r * 0.24, col.g * 0.24, col.b * 0.28, 0.95), col, 16, 3, 0))
+	b.add_theme_stylebox_override("pressed", UITheme.box(Color(col.r * 0.3, col.g * 0.3, col.b * 0.3, 0.95), Color.WHITE, 16, 3, 0))
+	var icons := {"weapon": "swords", "armor": "shield", "accessory": "gem"}
+	var ic := IconArt.new(icons.get(it["slot"], "gem"), 64)
+	ic.position = Vector2(12, 24)
+	b.add_child(ic)
+	var max_lv := int(GameData.RARITIES[int(it["rarity"])]["max_level"])
+	var t := UITheme.label("%s   Lv %d/%d" % [it["name"], GameState.item_level(it), max_lv], 22, col.lightened(0.25))
+	t.position = Vector2(88, 8)
+	b.add_child(t)
+	var st := UITheme.label(Loot.rarity_name(it) + " " + String(it["slot"]).capitalize() + "   " + Loot.stats_text(it), 16, UITheme.TEXT)
+	st.position = Vector2(88, 40)
+	b.add_child(st)
+	var eff := Loot.effect_desc(it)
+	var owner := GameState.item_owner(int(it["uid"]))
+	var extra := ("★ " + eff) if eff != "" else ""
+	if owner != "":
+		extra += ("   " if extra != "" else "") + "Equipped: " + String(GameData.HEROES[owner]["class"])
+	if extra != "":
+		var el := UITheme.label(extra, 16, Color(1.0, 0.85, 0.5))
+		el.position = Vector2(88, 66)
+		el.size = Vector2(520, 40)
+		el.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.add_child(el)
+	b.pressed.connect(on_tap)
+	parent.add_child(b)
+
+
+# ------------------------------------------------------------------ heroes
+
+func _show_heroes() -> void:
+	var body := _screen_frame("Heroes")
+	_god_note(body)
+	var id := _sel_hero
+	var def: Dictionary = GameData.HEROES[id]
+	var st := HeroStats.compute(id)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 10)
+	body.add_child(top)
+	var preview := HeroPreview.new(Vector2(300, 400))
+	top.add_child(preview)
+	preview.show_hero(id)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(info)
+	info.add_child(_wrap(def["name"], 30, def["color"]))
+	info.add_child(_wrap(def["title"], 18, Color(0.85, 0.8, 0.7)))
+	info.add_child(UITheme.label(String(def["class"]).to_upper(), 20, UITheme.GOLD))
+	var lvl := int(st["level"])
+	info.add_child(UITheme.label("Level %d / %d" % [lvl, GameData.HERO_MAX_LEVEL], 22, UITheme.TEXT))
+	var xpb := ProgressBar.new()
+	xpb.custom_minimum_size = Vector2(0, 18)
+	xpb.show_percentage = false
+	xpb.max_value = 1.0
+	xpb.value = 1.0 if lvl >= GameData.HERO_MAX_LEVEL else float(GameState.heroes[id]["xp"]) / GameData.hero_xp_to_next(lvl)
+	xpb.add_theme_stylebox_override("fill", UITheme.box(Color(0.4, 0.75, 1.0), Color(0, 0, 0, 0), 8, 0, 0))
+	info.add_child(xpb)
+	info.add_child(UITheme.label("Power  %d" % HeroStats.power_rating(id), 24, Color(1, 0.75, 0.3)))
+	info.add_child(_wrap("Damage %d  •  %.1f/s  •  Range %d\nCrit %d%%  •  %s" % [st["damage"], st["rate"], st["range"], int(st["crit"] * 100), String(def["attack"]["element"]).capitalize()], 18, Color(0.8, 0.92, 1.0)))
+	var lvl_btn := UITheme.button("LEVEL UP" + ("" if GameState.has_unlimited_resources() else "  (%d gold)" % (GameData.hero_xp_to_next(int(GameState.heroes[id]["level"])) * 2)), UITheme.GREEN, Vector2(0, 64))
+	lvl_btn.disabled = int(GameState.heroes[id]["level"]) >= GameData.HERO_MAX_LEVEL
+	lvl_btn.pressed.connect(func():
+		GameState.level_up_hero(id)
+		_show_heroes())
+	info.add_child(lvl_btn)
+	# ability
+	var ab := _panel(body, Color(0.16, 0.1, 0.22), def["color"])
+	ab.add_child(UITheme.label("ULTIMATE: %s   (Lv %d/%d)" % [def["ability"]["name"], st["ability_level"], GameData.ABILITY_MAX_LEVEL], 22, def["color"].lightened(0.3)))
+	ab.add_child(_wrap(def["ability"]["desc"], 18, UITheme.TEXT))
+	ab.add_child(UITheme.label("Ability damage %d  •  Cooldown %.1fs" % [st["ability_damage"], st["cooldown"]], 18, Color(0.85, 0.9, 1.0)))
+	var ab_btn := UITheme.button("UPGRADE ABILITY" + ("" if GameState.has_unlimited_resources() else "  (1 skill point)"), UITheme.PURPLE, Vector2(0, 60))
+	ab_btn.disabled = int(GameState.heroes[id]["ability_level"]) >= GameData.ABILITY_MAX_LEVEL
+	ab_btn.pressed.connect(func():
+		GameState.upgrade_ability(id)
+		_show_heroes())
+	ab.add_child(ab_btn)
+	# skins
+	body.add_child(UITheme.label("SKINS", 22, UITheme.GOLD))
+	var skins := HBoxContainer.new()
+	skins.add_theme_constant_override("separation", 8)
+	body.add_child(skins)
+	for i in GameData.SKINS.size():
+		var sk: Dictionary = GameData.SKINS[i]
+		var sel: bool = int(GameState.heroes[id]["skin"]) == i
+		var c: Color = def["color"] if float(sk["amount"]) < 0.0 else sk["tint"]
+		var sb := UITheme.button(sk["name"], Color(c.r * 0.4, c.g * 0.4, c.b * 0.45), Vector2(0, 64))
+		sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sb.add_theme_font_size_override("font_size", 17)
+		if sel:
+			sb.add_theme_stylebox_override("normal", UITheme.box(Color(c.r * 0.5, c.g * 0.5, c.b * 0.5), Color.WHITE, 16, 4))
+		var si: int = i
+		sb.pressed.connect(func():
+			GameState.set_skin(id, si)
+			_show_heroes())
+		skins.add_child(sb)
+	# team
+	body.add_child(UITheme.label("BATTLE TEAM (heroes deployed on the castle walls)", 20, UITheme.GOLD))
+	var team := HBoxContainer.new()
+	team.add_theme_constant_override("separation", 8)
+	body.add_child(team)
+	for slot in GameData.TEAM_SIZE:
+		var tid: String = GameState.team[slot]
+		var tb := UITheme.button("Slot %d\n%s" % [slot + 1, GameData.HEROES[tid]["class"]], GameData.HEROES[tid]["color"].darkened(0.55), Vector2(0, 80))
+		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tb.add_theme_font_size_override("font_size", 18)
+		var sl: int = slot
+		tb.pressed.connect(func():
+			GameState.set_team_slot(sl, id)
+			_show_heroes())
+		team.add_child(tb)
+	body.add_child(UITheme.label("Tap a slot to place %s there." % def["class"], 16, Color(0.8, 0.8, 0.8)))
+	# roster
+	body.add_child(UITheme.label("ROSTER", 22, UITheme.GOLD))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	body.add_child(grid)
+	for hid in GameData.HERO_ORDER:
+		var hd: Dictionary = GameData.HEROES[hid]
+		var unlocked := GameState.is_hero_unlocked(hid)
+		var hb := Button.new()
+		hb.custom_minimum_size = Vector2(0, 118)
+		hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var hc: Color = hd["color"]
+		hb.add_theme_stylebox_override("normal", UITheme.box(Color(hc.r * 0.2, hc.g * 0.2, hc.b * 0.25), Color.WHITE if hid == id else hc.darkened(0.3), 16, 4 if hid == id else 2))
+		hb.add_theme_stylebox_override("hover", UITheme.box(Color(hc.r * 0.3, hc.g * 0.3, hc.b * 0.35), hc, 16, 3))
+		UITheme.juice(hb)
+		var ic := IconArt.new(BattleHUD.HERO_ICONS[hid], 52)
+		ic.position = Vector2(8, 8)
+		hb.add_child(ic)
+		var nl := UITheme.label(hd["class"], 17, hc.lightened(0.3))
+		nl.position = Vector2(8, 64)
+		hb.add_child(nl)
+		var ll := UITheme.label(("Lv %d" % GameState.hero_level(hid)) if unlocked else "LOCKED", 16, UITheme.GOLD if unlocked else Color(1, 0.5, 0.4))
+		ll.position = Vector2(8, 88)
+		hb.add_child(ll)
+		if GameState.team.has(hid):
+			var tl := UITheme.label("TEAM", 14, Color(0.5, 1.0, 0.5))
+			tl.position = Vector2(70, 12)
+			hb.add_child(tl)
+		hb.pressed.connect(func():
+			if not GameState.is_hero_unlocked(hid):
+				GameState.unlock_hero(hid)
+			_sel_hero = hid
+			_show_heroes())
+		grid.add_child(hb)
+
+
+# ------------------------------------------------------------------ equipment
+
+func _show_equipment() -> void:
+	var body := _screen_frame("Equipment")
+	_god_note(body)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 92)
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.add_child(row)
+	body.add_child(scroll)
+	for hid in GameData.HERO_ORDER:
+		var hc: Color = GameData.HEROES[hid]["color"]
+		var hb := UITheme.button(String(GameData.HEROES[hid]["class"]).get_slice(" ", 0), hc.darkened(0.6 if hid != _sel_hero else 0.25), Vector2(118, 80))
+		hb.add_theme_font_size_override("font_size", 17)
+		hb.pressed.connect(func():
+			_sel_hero = hid
+			_show_equipment())
+		row.add_child(hb)
+	var id := _sel_hero
+	var def: Dictionary = GameData.HEROES[id]
+	body.add_child(UITheme.label("%s  —  %s" % [def["name"], def["class"]], 26, def["color"]))
+	var st := HeroStats.compute(id)
+	body.add_child(_wrap("Power %d   •   Damage %d   •   Ability %d   •   Cooldown %.1fs" % [HeroStats.power_rating(id), st["damage"], st["ability_damage"], st["cooldown"]], 18, Color(0.85, 0.92, 1.0)))
+	for slot in GameData.SLOTS:
+		body.add_child(UITheme.label(String(slot).to_upper(), 22, UITheme.GOLD))
+		var it := GameState.equipped_item(id, slot)
+		if it.is_empty():
+			body.add_child(UITheme.label("  (empty) — choose an item below", 18, Color(0.7, 0.7, 0.7)))
+		else:
+			var uid := int(it["uid"])
+			var sl: String = slot
+			_item_card(body, it, func():
+				GameState.unequip(id, sl)
+				_show_equipment(), true)
+		# candidate items for this slot
+		var cands: Array = GameState.inventory.filter(func(x): return x["slot"] == slot and int(x["uid"]) != int(it.get("uid", -1)))
+		cands.sort_custom(func(a, b): return int(a["rarity"]) * 1000 + GameState.item_level(a) > int(b["rarity"]) * 1000 + GameState.item_level(b))
+		for c in cands.slice(0, 4):
+			var cuid := int(c["uid"])
+			_item_card(body, c, func():
+				GameState.equip(id, cuid)
+				_show_equipment())
+		if cands.size() > 4:
+			body.add_child(UITheme.label("  +%d more in Inventory" % (cands.size() - 4), 16, Color(0.7, 0.7, 0.7)))
+	body.add_child(UITheme.label("Tap an item to equip it. Tap an equipped item to remove it.", 16, Color(0.8, 0.8, 0.8)))
+
+
+# ------------------------------------------------------------------ inventory
+
+func _show_inventory() -> void:
+	var body := _screen_frame("Inventory")
+	_god_note(body)
+	var names := {"gold": "Gold", "gems": "Gems", "diamonds": "Diamonds", "materials": "Materials",
+		"energy": "Energy", "skill_points": "Skill Pts", "summon_tickets": "Tickets"}
+	var cg := GridContainer.new()
+	cg.columns = 4
+	cg.add_theme_constant_override("h_separation", 6)
+	cg.add_theme_constant_override("v_separation", 6)
+	body.add_child(cg)
+	for k in names:
+		var v := _panel(cg)
+		v.add_child(UITheme.label(names[k], 16, Color(0.85, 0.8, 0.7)))
+		v.add_child(UITheme.label(GameState.currency_text(k), 24, UITheme.GOLD))
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 6)
+	body.add_child(tabs)
+	for f in ["", "weapon", "armor", "accessory"]:
+		var tb := UITheme.button("All" if f == "" else String(f).capitalize(), UITheme.BLUE if _inv_filter == f else UITheme.PURPLE, Vector2(0, 60))
+		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var ff: String = f
+		tb.pressed.connect(func():
+			_inv_filter = ff
+			_show_inventory())
+		tabs.add_child(tb)
+	if GameState.is_god("enabled"):
+		var gb := UITheme.button("GOD: Grant every legendary & mythic (max level)", Color(0.55, 0.38, 0.05), Vector2(0, 64))
+		gb.pressed.connect(func():
+			GameState.grant_all_legendaries()
+			_show_inventory())
+		body.add_child(gb)
+	var items: Array = GameState.inventory.filter(func(x): return _inv_filter == "" or x["slot"] == _inv_filter)
+	items.sort_custom(func(a, b): return int(a["rarity"]) * 1000 + GameState.item_level(a) > int(b["rarity"]) * 1000 + GameState.item_level(b))
+	body.add_child(UITheme.label("%d items" % items.size(), 18, Color(0.8, 0.8, 0.8)))
+	for it in items:
+		var uid := int(it["uid"])
+		_item_card(body, it, func():
+			_selected_uid = uid if _selected_uid != uid else -1
+			_show_inventory(), uid == _selected_uid)
+		if uid == _selected_uid:
+			_item_actions(body, it)
+
+
+func _item_actions(body: Control, it: Dictionary) -> void:
+	var uid := int(it["uid"])
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	body.add_child(row)
+	var max_lv := int(GameData.RARITIES[int(it["rarity"])]["max_level"])
+	var cost := GameState.item_upgrade_cost(it)
+	var free := GameState.has_unlimited_resources()
+	var up := UITheme.button("UPGRADE" + ("" if free else "\n%dg %dm" % [cost["gold"], cost["materials"]]), UITheme.GREEN, Vector2(0, 72))
+	up.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	up.add_theme_font_size_override("font_size", 18)
+	up.disabled = int(it["level"]) >= max_lv
+	up.pressed.connect(func():
+		GameState.upgrade_item(uid)
+		_show_inventory())
+	row.add_child(up)
+	if GameState.is_god("enabled"):
+		var mx := UITheme.button("MAX", Color(0.6, 0.42, 0.05), Vector2(90, 72))
+		mx.pressed.connect(func():
+			GameState.max_item(uid)
+			_show_inventory())
+		row.add_child(mx)
+	var eq := UITheme.button("EQUIP\n" + String(GameData.HEROES[_sel_hero]["class"]).get_slice(" ", 0), UITheme.BLUE, Vector2(120, 72))
+	eq.add_theme_font_size_override("font_size", 17)
+	eq.pressed.connect(func():
+		GameState.equip(_sel_hero, uid)
+		_show_inventory())
+	row.add_child(eq)
+	var sv := UITheme.button("SALVAGE", UITheme.RED, Vector2(120, 72))
+	sv.add_theme_font_size_override("font_size", 18)
+	sv.pressed.connect(func():
+		GameState.salvage_item(uid)
+		_selected_uid = -1
+		_show_inventory())
+	row.add_child(sv)
+
+
+# ------------------------------------------------------------------ upgrades
+
+func _show_upgrades() -> void:
+	var body := _screen_frame("Upgrades")
+	_god_note(body)
+	body.add_child(_wrap("Permanent upgrades apply to every battle. In-battle roguelike Blessings are chosen every %d waves." % GameData.BLESSING_EVERY, 18, Color(0.85, 0.82, 0.78)))
+	if GameState.is_god("enabled"):
+		var mb := UITheme.button("GOD: Max every upgrade, hero and item", Color(0.55, 0.38, 0.05), Vector2(0, 64))
+		mb.pressed.connect(func():
+			GameState.max_all_meta()
+			_show_upgrades())
+		body.add_child(mb)
+	var group := ""
+	for uid in GameData.UPGRADE_ORDER:
+		var u: Dictionary = GameData.UPGRADES[uid]
+		if u["group"] != group:
+			group = u["group"]
+			body.add_child(UITheme.label(group.to_upper(), 22, UITheme.GOLD))
+		var lv := GameState.upgrade_level(uid)
+		var mx := int(u["max"])
+		var v := _panel(body)
+		var head := HBoxContainer.new()
+		v.add_child(head)
+		var t := UITheme.label("%s   %d/%d" % [u["name"], lv, mx], 22, UITheme.TEXT)
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(t)
+		var raw := int(GameState.upgrades.get(uid, 0))
+		var free := GameState.has_unlimited_resources()
+		var bb := UITheme.button("MAX" if raw >= mx else ("BUY" if free else "%d g" % GameData.upgrade_cost(uid, raw)), UITheme.GREEN, Vector2(130, 56))
+		bb.add_theme_font_size_override("font_size", 18)
+		bb.disabled = raw >= mx
+		var key: String = uid
+		bb.pressed.connect(func():
+			GameState.buy_upgrade(key)
+			_show_upgrades())
+		head.add_child(bb)
+		v.add_child(UITheme.label(u["desc"], 17, Color(0.85, 0.82, 0.78)))
+		var pb := ProgressBar.new()
+		pb.custom_minimum_size = Vector2(0, 14)
+		pb.show_percentage = false
+		pb.max_value = mx
+		pb.value = lv
+		pb.add_theme_stylebox_override("fill", UITheme.box(UITheme.GOLD, Color(0, 0, 0, 0), 6, 0, 0))
+		v.add_child(pb)

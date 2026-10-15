@@ -43,6 +43,31 @@ func setup(p_enemies: EnemyManager, p_fx: FX) -> void:
 	var shard := PrismMesh.new()
 	shard.size = Vector3(0.25, 0.9, 0.25)
 	_meshes["ice"] = shard
+	var holy := SphereMesh.new()
+	holy.radius = 0.45
+	holy.height = 0.9
+	_meshes["holy"] = holy
+	var thorn := PrismMesh.new()
+	thorn.size = Vector3(0.3, 1.1, 0.3)
+	_meshes["thorn"] = thorn
+	var soul := SphereMesh.new()
+	soul.radius = 0.38
+	soul.height = 0.76
+	_meshes["soul"] = soul
+	var bomb := SphereMesh.new()
+	bomb.radius = 0.36
+	bomb.height = 0.72
+	_meshes["bomb"] = bomb
+	_meshes["dragonfire"] = orb
+	_meshes["hex"] = soul
+	_meshes["enemy_arrow"] = _meshes["arrow"]
+	_mats["holy"] = _glow(Color(1.0, 0.9, 0.45), 7.0)
+	_mats["thorn"] = _glow(Color(0.45, 1.0, 0.3), 3.0)
+	_mats["soul"] = _glow(Color(0.7, 0.35, 1.0), 6.0)
+	_mats["bomb"] = _solid(Color(0.15, 0.13, 0.12), 0.4)
+	_mats["dragonfire"] = _glow(Color(0.3, 1.0, 0.85), 6.0)
+	_mats["hex"] = _glow(Color(0.6, 0.2, 1.0), 6.0)
+	_mats["enemy_arrow"] = MeshKit.vertex_color_material(0.6)
 	_mats["arrow"] = MeshKit.vertex_color_material(0.6)
 	_mats["shell"] = _solid(Color(0.12, 0.12, 0.14), 0.0)
 	_mats["fire"] = _glow(Color(1.0, 0.45, 0.1), 6.0)
@@ -86,10 +111,11 @@ func _get_node(kind: String) -> Node3D:
 	mi.mesh = _meshes[kind]
 	mi.material_override = _mats[kind]
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if kind == "fire" or kind == "fireball":
-		mi.add_child(_trail(Color(1.0, 0.5, 0.1), 1.0 if kind == "fire" else 2.2))
-	elif kind == "ice":
-		mi.add_child(_trail(Color(0.6, 0.9, 1.0), 0.6))
+	var trails := {"fire": [Color(1.0, 0.5, 0.1), 1.0], "fireball": [Color(1.0, 0.5, 0.1), 2.2], "ice": [Color(0.6, 0.9, 1.0), 0.6],
+		"holy": [Color(1.0, 0.9, 0.4), 1.2], "thorn": [Color(0.4, 1.0, 0.3), 0.6], "soul": [Color(0.7, 0.3, 1.0), 1.0],
+		"bomb": [Color(0.8, 0.6, 0.3), 0.7], "dragonfire": [Color(0.3, 1.0, 0.8), 1.4], "hex": [Color(0.6, 0.2, 1.0), 0.9]}
+	if trails.has(kind):
+		mi.add_child(_trail(trails[kind][0], trails[kind][1]))
 	add_child(mi)
 	return mi
 
@@ -150,11 +176,11 @@ func _process(delta: float) -> void:
 		p.y += s.arc * 4.0 * t * (1.0 - t)
 		var prev := s.node.global_position
 		s.node.global_position = p
-		if (p - prev).length_squared() > 0.0001 and s.kind != "fire" and s.kind != "fireball":
+		if (p - prev).length_squared() > 0.0001 and s.kind in ["arrow", "enemy_arrow", "ice", "thorn", "shell", "bomb"]:
 			s.node.look_at(p + (p - prev), Vector3.UP)
-			if s.kind == "ice":
+			if s.kind == "ice" or s.kind == "thorn":
 				s.node.rotate_object_local(Vector3.RIGHT, -PI / 2)
-			elif s.kind == "arrow":
+			elif s.kind == "arrow" or s.kind == "enemy_arrow":
 				s.node.rotate_object_local(Vector3.UP, PI)
 		if s.t >= 1.0:
 			s.on_hit.call(s.to, s.target)

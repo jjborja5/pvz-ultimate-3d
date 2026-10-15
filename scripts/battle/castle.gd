@@ -1,17 +1,25 @@
 class_name Castle
 extends Node3D
-## The player's fortress: procedural stone walls, gatehouse, towers, keep, banners,
-## torches, build pads and a magical barrier that flares when hit under God Mode.
+## The player's fortress, assembled from CC0 KayKit Medieval Hexagon pieces: stone wall
+## segments, a gate, gate towers, corner towers, a keep and a small town behind it.
+## Also owns torches, build pads, hero posts and the magical barrier that flares under God Mode.
 
 signal destroyed
 signal hp_changed(hp: float, max_hp: float)
 
 const WIDTH := 30.0
-const MAX_HP := 3000.0
-const WALL_TOP := 5.05
+const BASE_HP := 3000.0
+const MAX_HP := 3000.0                 # legacy constant (base value)
+const WALL_SCALE := Vector3(3.0, 4.0, 3.75)
+const WALL_TOP := 3.6                  # walkway height (0.9 * WALL_SCALE.y)
+const GATE_TOWER_TOP := 4.5            # tower_base top (1.5 * 3.0)
+const HEX := "hexagon/"
 
-var hp := MAX_HP
-var pads: Array[Dictionary] = []   # {pos: Vector3, tower: Tower, node: Node3D}
+var hp := BASE_HP
+var max_hp := BASE_HP
+var armor := 0.0                       # damage reduction from upgrades / items
+var pads: Array[Dictionary] = []       # {pos: Vector3, tower: Tower, node: Node3D}
+var hero_posts: Array[Vector3] = [Vector3(-9.2, WALL_TOP, -0.2), Vector3(0.0, WALL_TOP + 0.5, -0.2), Vector3(9.2, WALL_TOP, -0.2)]
 var _barrier_mat: StandardMaterial3D
 var _barrier_flash := 0.0
 var fx: FX
@@ -19,37 +27,48 @@ var fx: FX
 
 func build(p_fx: FX) -> void:
 	fx = p_fx
-	var body := MeshInstance3D.new()
-	body.mesh = Models.castle(WIDTH)
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/prop.gdshader")
-	m.set_shader_parameter("glow_color", Color(1.0, 0.75, 0.4))
-	m.set_shader_parameter("glow_strength", 2.0)
-	body.material_override = m
-	add_child(body)
-	var trim := MeshInstance3D.new()
-	trim.mesh = Models.castle_trim(WIDTH)
-	var tm := MeshKit.vertex_color_material(0.5)
-	tm.metallic = 0.3
-	trim.material_override = tm
-	add_child(trim)
+	# stone wall: five segments, gate in the middle
+	for i in 5:
+		var x := -12.0 + i * 6.0
+		var piece := "wall_straight_gate" if i == 2 else "wall_straight"
+		Assets.place(self, HEX + piece + ".gltf", Vector3(x, 0, 0), WALL_SCALE)
+	# gate towers flanking the gate
 	for side in [-1, 1]:
-		_torch(Vector3(side * 2.0, 4.2, -1.9))
-		_torch(Vector3(side * 9.5, 5.6, -1.4))
+		Assets.place(self, HEX + "building_tower_base_blue.gltf", Vector3(side * 3.2, 0, -0.4), 3.0)
+		Assets.place(self, HEX + "flag_blue.gltf", Vector3(side * 3.2, GATE_TOWER_TOP, 0.6), 6.0, PI * 0.5)
+	# corner towers
+	for side in [-1, 1]:
+		Assets.place(self, HEX + "building_tower_B_blue.gltf", Vector3(side * 15.8, 0, 0.0), 4.6, side * 0.4)
+		Assets.place(self, HEX + "flag_red.gltf", Vector3(side * 15.8, 11.4, 0.0), 8.0, PI * 0.5)
+	# keep and town behind the wall
+	Assets.place(self, HEX + "building_castle_blue.gltf", Vector3(0, 0, 10.0), 4.6)
+	Assets.place(self, HEX + "building_church_blue.gltf", Vector3(-11.0, 0, 9.0), 4.0, 0.3)
+	Assets.place(self, HEX + "building_barracks_blue.gltf", Vector3(11.0, 0, 8.0), 4.2, -0.4)
+	Assets.place(self, HEX + "building_home_A_blue.gltf", Vector3(-6.5, 0, 6.5), 4.0, 0.8)
+	Assets.place(self, HEX + "building_home_B_blue.gltf", Vector3(6.5, 0, 6.0), 4.0, -0.6)
+	Assets.place(self, HEX + "building_blacksmith_blue.gltf", Vector3(-15.5, 0, 6.5), 4.0, 0.2)
+	Assets.place(self, HEX + "building_windmill_blue.gltf", Vector3(17.0, 0, 9.0), 4.0, -0.3)
+	Assets.place(self, HEX + "building_tavern_blue.gltf", Vector3(-3.0, 0, 15.5), 4.0, 0.0)
+	Assets.place(self, HEX + "building_well_blue.gltf", Vector3(3.5, 0, 4.5), 3.5, 0.5)
+	# battlements props
+	for x in [-13.5, -7.5, 7.5, 13.5]:
+		Assets.place(self, "dungeon/banner_patternA_blue.glb", Vector3(x, 1.0, -1.55), Vector3(1.0, 1.2, 1.0), PI)
+	for side in [-1, 1]:
+		_torch(Vector3(side * 1.9, 2.4, -1.7))
+		_torch(Vector3(side * 10.5, 2.4, -1.6))
 	_build_barrier()
 	_build_pads()
 
 
+func set_max_hp(value: float) -> void:
+	var ratio := hp / max_hp
+	max_hp = value
+	hp = max_hp * ratio
+	hp_changed.emit(hp, max_hp)
+
+
 func _torch(pos: Vector3) -> void:
-	var holder := MeshInstance3D.new()
-	var c := CylinderMesh.new()
-	c.top_radius = 0.12
-	c.bottom_radius = 0.06
-	c.height = 0.5
-	holder.mesh = c
-	holder.material_override = MeshKit.vertex_color_material()
-	holder.position = pos
-	add_child(holder)
+	Assets.place(self, "dungeon/torch_mounted.glb", pos + Vector3(0, -0.2, 0.15), 1.4, PI)
 	var p := GPUParticles3D.new()
 	var pm := ParticleProcessMaterial.new()
 	pm.direction = Vector3.UP
@@ -76,7 +95,7 @@ func _torch(pos: Vector3) -> void:
 	q.size = Vector2(0.45, 0.45)
 	q.material = fx.additive_material(Color(2.0, 1.4, 0.8))
 	p.draw_pass_1 = q
-	p.position = pos + Vector3(0, 0.35, 0)
+	p.position = pos + Vector3(0, 0.55, -0.35)
 	add_child(p)
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.6, 0.25)
@@ -107,16 +126,16 @@ func _build_barrier() -> void:
 	_barrier_mat.albedo_texture = gt
 	mi.material_override = _barrier_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.position = Vector3(0, 3.5, -2.2)
+	mi.position = Vector3(0, 3.5, -2.4)
 	add_child(mi)
 
 
 func _build_pads() -> void:
 	var spots := [
-		Vector3(-11.5, WALL_TOP, 0.0), Vector3(-7.5, WALL_TOP, 0.0), Vector3(7.5, WALL_TOP, 0.0), Vector3(11.5, WALL_TOP, 0.0),
-		Vector3(-3.4, 7.5, -0.2), Vector3(3.4, 7.5, -0.2),
-		Vector3(-15.4, 9.5, 0.0), Vector3(15.4, 9.5, 0.0),
-		Vector3(-4.0, 0.0, -11.0), Vector3(4.0, 0.0, -11.0), Vector3(-12.5, 0.0, -17.0), Vector3(12.5, 0.0, -17.0),
+		Vector3(-12.5, WALL_TOP, 0.0), Vector3(-5.8, WALL_TOP, 0.0), Vector3(5.8, WALL_TOP, 0.0), Vector3(12.5, WALL_TOP, 0.0),
+		Vector3(-3.2, GATE_TOWER_TOP, -0.4), Vector3(3.2, GATE_TOWER_TOP, -0.4),
+		Vector3(-4.0, 0.0, -11.0), Vector3(4.0, 0.0, -11.0), Vector3(-12.5, 0.0, -15.0), Vector3(12.5, 0.0, -15.0),
+		Vector3(-8.5, 0.0, -24.0), Vector3(8.5, 0.0, -24.0),
 	]
 	var pad_mat := ShaderMaterial.new()
 	pad_mat.shader = load("res://shaders/prop.gdshader")
@@ -145,8 +164,8 @@ func take_damage(amount: float, at: Vector3) -> void:
 	if GameState.is_god("invincible") or amount <= 0.0:
 		_barrier_flash = 1.0
 		return
-	hp = maxf(0.0, hp - amount)
-	hp_changed.emit(hp, MAX_HP)
+	hp = maxf(0.0, hp - amount * (1.0 - clampf(armor, 0.0, 0.9)))
+	hp_changed.emit(hp, max_hp)
 	if randf() < 0.15:
 		fx.hit_spark(Vector3(at.x, 2.0 + randf() * 2.0, -1.3), Color(0.8, 0.7, 0.6))
 	if hp <= 0.0:
@@ -154,8 +173,13 @@ func take_damage(amount: float, at: Vector3) -> void:
 
 
 func repair_full() -> void:
-	hp = MAX_HP
-	hp_changed.emit(hp, MAX_HP)
+	hp = max_hp
+	hp_changed.emit(hp, max_hp)
+
+
+func heal(amount: float) -> void:
+	hp = minf(max_hp, hp + amount)
+	hp_changed.emit(hp, max_hp)
 
 
 func _process(delta: float) -> void:

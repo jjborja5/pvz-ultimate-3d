@@ -111,6 +111,50 @@ func _draw() -> void:
 			draw_line(c + Vector2(r * 0.7, r * 0.7), c + Vector2(-r * 0.7, -r * 0.7), Color(0.85, 0.85, 0.9), 6.0, true)
 			draw_line(c + Vector2(-r * 0.6, r * 0.3), c + Vector2(-r * 0.3, r * 0.6), Color(1, 0.8, 0.3), 6.0, true)
 			draw_line(c + Vector2(r * 0.6, r * 0.3), c + Vector2(r * 0.3, r * 0.6), Color(1, 0.8, 0.3), 6.0, true)
+		"leaf":
+			_glow_disc(c, r, Color(0.3, 0.7, 0.25))
+			var pts := PackedVector2Array()
+			for i in 13:
+				var t := float(i) / 12.0 * TAU
+				pts.append(c + Vector2(sin(t) * r * 0.42, -cos(t) * r * 0.75))
+			draw_colored_polygon(pts, Color(0.45, 0.9, 0.35))
+			draw_line(c + Vector2(0, -r * 0.7), c + Vector2(0, r * 0.8), Color(0.2, 0.45, 0.15), 3.0, true)
+		"dragon":
+			_glow_disc(c, r, Color(0.15, 0.6, 0.55))
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.85, -r * 0.1), c + Vector2(-r * 0.15, -r * 0.6), c + Vector2(0, 0)]), Color(0.3, 0.9, 0.8))
+			draw_colored_polygon(PackedVector2Array([c + Vector2(r * 0.85, -r * 0.1), c + Vector2(r * 0.15, -r * 0.6), c + Vector2(0, 0)]), Color(0.3, 0.9, 0.8))
+			draw_circle(c + Vector2(0, r * 0.15), r * 0.32, Color(0.2, 0.7, 0.6))
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.15, r * 0.3), c + Vector2(r * 0.15, r * 0.3), c + Vector2(0, r * 0.85)]), Color(1, 0.6, 0.15))
+			draw_circle(c + Vector2(-r * 0.12, r * 0.08), r * 0.06, Color(1, 0.9, 0.3))
+			draw_circle(c + Vector2(r * 0.12, r * 0.08), r * 0.06, Color(1, 0.9, 0.3))
+		"castle":
+			_glow_disc(c, r, Color(0.45, 0.45, 0.55))
+			draw_rect(Rect2(c + Vector2(-r * 0.7, -r * 0.2), Vector2(r * 1.4, r * 0.8)), Color(0.75, 0.73, 0.7))
+			for i in 4:
+				draw_rect(Rect2(c + Vector2(-r * 0.7 + i * r * 0.4, -r * 0.45), Vector2(r * 0.22, r * 0.3)), Color(0.75, 0.73, 0.7))
+			draw_rect(Rect2(c + Vector2(-r * 0.15, r * 0.2), Vector2(r * 0.3, r * 0.4)), Color(0.25, 0.18, 0.12))
+		"meteor_shower":
+			_glow_disc(c, r, Color(0.8, 0.25, 0.05))
+			for i in 3:
+				var o := Vector2(-r * 0.45 + i * r * 0.45, -r * 0.2 + (i % 2) * r * 0.35)
+				draw_line(c + o + Vector2(r * 0.1, r * 0.1), c + o + Vector2(-r * 0.35, -r * 0.45), Color(1, 0.55, 0.1, 0.8), 4.0, true)
+				draw_circle(c + o + Vector2(r * 0.1, r * 0.1), r * 0.2, Color(0.4, 0.22, 0.12))
+				draw_circle(c + o + Vector2(r * 0.07, r * 0.07), r * 0.09, Color(1, 0.6, 0.15))
+		"firestorm":
+			_glow_disc(c, r, Color(0.8, 0.3, 0.05))
+			for i in 5:
+				var w := r * (0.75 - i * 0.12)
+				draw_arc(c + Vector2(i * r * 0.06, -r * 0.55 + i * r * 0.3), w, 0.2, PI - 0.2, 12, Color(1, 0.75 - i * 0.1, 0.2), 4.0, true)
+		"frost_nova":
+			_glow_disc(c, r, Color(0.4, 0.75, 1.0))
+			for i in 8:
+				var a := i * TAU / 8.0
+				draw_colored_polygon(PackedVector2Array([c + Vector2(cos(a - 0.15), sin(a - 0.15)) * r * 0.2, c + Vector2(cos(a), sin(a)) * r * 0.85,
+					c + Vector2(cos(a + 0.15), sin(a + 0.15)) * r * 0.2]), Color(0.85, 0.97, 1.0))
+		"divine_wrath":
+			_glow_disc(c, r, Color(1.0, 0.85, 0.35))
+			draw_rect(Rect2(c + Vector2(-r * 0.15, -r * 0.85), Vector2(r * 0.3, r * 1.7)), Color(1, 1, 0.85))
+			draw_rect(Rect2(c + Vector2(-r * 0.55, -r * 0.3), Vector2(r * 1.1, r * 0.25)), Color(1, 1, 0.85))
 		_:
 			draw_circle(c, r, Color(0.6, 0.6, 0.7))
 

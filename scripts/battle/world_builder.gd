@@ -172,10 +172,19 @@ func _build_terrain() -> void:
 	st.generate_normals()
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.vertex_color_is_srgb = true
-	mat.roughness = 0.95
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/terrain.gdshader")
+	var tex := NoiseTexture2D.new()
+	tex.seamless = true
+	tex.width = 256
+	tex.height = 256
+	tex.generate_mipmaps = true
+	var fn := FastNoiseLite.new()
+	fn.frequency = 0.05
+	fn.fractal_octaves = 3
+	tex.noise = fn
+	mat.set_shader_parameter("detail", tex)
+	mat.set_shader_parameter("snow", 1.0 if map_id == "skyspire_peaks" else 0.0)
 	mi.material_override = mat
 	mi.name = "Terrain"
 	add_child(mi)
@@ -238,66 +247,155 @@ func _scatter_point(min_abs_x: float) -> Vector3:
 	return Vector3(60, height_at(60, -60), -60)
 
 
-func _build_vegetation() -> void:
-	var count: int = pal["trees"]
-	var style: String = pal["tree_style"]
-	var variants := 4
-	var per := []
-	for v in variants:
-		per.append([])
+const H := "hexagon/"
+const HW := "halloween/"
+const DG := "dungeon/"
+
+
+func _scatter(path: String, count: int, min_abs_x: float, smin: float, smax: float, mat: Material = null, sink := 0.0, area := Rect2(-66, -135, 132, 165)) -> void:
+	## Scatter a CC0 KayKit model with one MultiMesh (one draw call per surface).
+	if count <= 0:
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = Assets.mesh(path)
+	var xforms: Array[Transform3D] = []
 	for i in count:
-		per[i % variants].append(_scatter_point(FIELD_HALF + 3.0))
-	var mat := MeshKit.vertex_color_material(0.9)
-	for v in variants:
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = Models.tree(style, v)
-		var pts: Array = per[v]
-		mm.instance_count = pts.size()
-		for i in pts.size():
-			var s := _rng.randf_range(0.8, 1.6)
-			var b := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s * _rng.randf_range(0.9, 1.2), s))
-			mm.set_instance_transform(i, Transform3D(b, pts[i]))
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
+		var p := Vector3.INF
+		for _attempt in 24:
+			var x := _rng.randf_range(area.position.x, area.end.x)
+			var z := _rng.randf_range(area.position.y, area.end.y)
+			if absf(x) < min_abs_x and z < 8.0:
+				continue
+			if z > -6.0 and absf(x) < 28.0:
+				continue
+			var h := height_at(x, z)
+			if h < -0.6:
+				continue
+			p = Vector3(x, h - sink, z)
+			break
+		if p == Vector3.INF:
+			continue
+		var sc := _rng.randf_range(smin, smax)
+		xforms.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * sc), p))
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, xforms[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	if mat:
 		mmi.material_override = mat
-		add_child(mmi)
+	add_child(mmi)
+
+
+func _place_ring(paths: Array, count: int, radius_min: float, smin: float, smax: float, mat: Material = null, sides_only := false) -> void:
+	## Big landmarks (mountains) framing the battlefield on the sides and far end.
+	for i in count:
+		var path: String = paths[i % paths.size()]
+		var x: float
+		var z: float
+		if sides_only or i % 3 != 0:
+			var side := 1.0 if i % 2 == 0 else -1.0
+			x = side * _rng.randf_range(radius_min, radius_min + 22.0)
+			z = _rng.randf_range(-140.0, 10.0)
+		else:
+			x = _rng.randf_range(-70.0, 70.0)
+			z = _rng.randf_range(-150.0, -122.0)
+		var y := height_at(x, z) - 1.0
+		Assets.place(self, path, Vector3(x, y, z), _rng.randf_range(smin, smax), _rng.randf() * TAU, mat)
+
+
+func _build_vegetation() -> void:
+	match map_id:
+		"verdant_pass":
+			_place_ring([H + "mountain_A_grass_trees.gltf", H + "mountain_B_grass_trees.gltf", H + "mountain_C_grass_trees.gltf"], 16, 42.0, 15.0, 24.0)
+			_scatter(H + "hills_A_trees.gltf", 10, FIELD_HALF + 12.0, 7.0, 11.0, null, 0.5)
+			_scatter(H + "hills_B_trees.gltf", 10, FIELD_HALF + 12.0, 7.0, 11.0, null, 0.5)
+			for t in ["trees_A_large", "trees_A_medium", "trees_B_large", "trees_B_medium"]:
+				_scatter(H + t + ".gltf", 26, FIELD_HALF + 4.0, 3.0, 4.6)
+			for t in ["tree_single_A", "tree_single_B"]:
+				_scatter(H + t + ".gltf", 40, FIELD_HALF + 2.0, 3.2, 5.0)
+		"molten_abyss":
+			var dark := Assets.tinted(H + "mountain_A.gltf", Color(0.32, 0.2, 0.17), 0.8, 0.0, 0.6, 0.05)
+			_place_ring([H + "mountain_A.gltf", H + "mountain_B.gltf", H + "mountain_C.gltf"], 18, 40.0, 16.0, 26.0, dark)
+			_scatter(H + "hills_A.gltf", 12, FIELD_HALF + 12.0, 7.0, 11.0, dark, 0.5)
+			for t in ["tree_dead_large", "tree_dead_medium", "tree_dead_small"]:
+				_scatter(HW + t + ".gltf", 14, FIELD_HALF + 3.0, 1.0, 1.6, Assets.tinted(HW + t + ".gltf", Color(0.25, 0.18, 0.15), 0.7))
+		"shattered_ruins":
+			_place_ring([H + "mountain_A_grass.gltf", H + "mountain_B_grass.gltf", H + "mountain_C_grass.gltf"], 14, 42.0, 14.0, 22.0,
+				Assets.tinted(H + "mountain_A_grass.gltf", Color(0.6, 0.6, 0.5), 0.35))
+			_scatter(H + "hills_C.gltf", 10, FIELD_HALF + 12.0, 7.0, 10.0, null, 0.5)
+			for t in ["tree_dead_large", "tree_dead_medium", "tree_dead_small"]:
+				_scatter(HW + t + ".gltf", 18, FIELD_HALF + 2.0, 1.0, 1.7)
+			_scatter(HW + "tree_pine_orange_large.gltf", 14, FIELD_HALF + 4.0, 1.0, 1.4)
+			_scatter(HW + "tree_pine_yellow_large.gltf", 14, FIELD_HALF + 4.0, 1.0, 1.4)
+		"skyspire_peaks":
+			var snowy := Assets.tinted(H + "mountain_A_grass_trees.gltf", Color(1, 1, 1), 0.0, 1.0, 1.15)
+			_place_ring([H + "mountain_A_grass_trees.gltf", H + "mountain_B_grass_trees.gltf", H + "mountain_C_grass_trees.gltf", H + "mountain_A.gltf"], 22, 36.0, 18.0, 30.0, snowy)
+			_scatter(H + "hills_A_trees.gltf", 12, FIELD_HALF + 10.0, 7.0, 11.0, Assets.tinted(H + "hills_A_trees.gltf", Color(1, 1, 1), 0.0, 1.0, 0.9), 0.5)
+			for t in ["trees_B_large", "trees_B_medium", "trees_B_small"]:
+				_scatter(H + t + ".gltf", 30, FIELD_HALF + 3.0, 3.0, 4.6, Assets.tinted(H + t + ".gltf", Color(1, 1, 1), 0.0, 0.8, 0.55))
+	_build_clouds()
+
+
+func _build_clouds() -> void:
+	if map_id == "molten_abyss":
+		return
+	var count := 14 if map_id == "skyspire_peaks" else 8
+	var mat := Assets.tinted(H + "cloud_big.gltf", Color(1, 1, 1), 0.0, 0.0, 0.6, 0.35)
+	for i in count:
+		var side := 1.0 if i % 2 == 0 else -1.0
+		var c := Assets.place(self, H + ("cloud_big.gltf" if i % 3 else "cloud_small.gltf"),
+			Vector3(side * _rng.randf_range(24.0, 60.0), _rng.randf_range(16.0, 28.0), _rng.randf_range(-140.0, -20.0)),
+			_rng.randf_range(4.0, 7.0), _rng.randf() * TAU, mat)
+		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		var tw := c.create_tween().set_loops()
+		var drift := _rng.randf_range(4.0, 9.0)
+		tw.tween_property(c, "position:x", c.position.x + drift, _rng.randf_range(14.0, 24.0)).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(c, "position:x", c.position.x, _rng.randf_range(14.0, 24.0)).set_trans(Tween.TRANS_SINE)
 
 
 func _build_rocks_and_ruins() -> void:
-	var mat := MeshKit.vertex_color_material(0.95)
-	var rock_c: Color = pal["rock"]
-	for v in 3:
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = Models.rock(v, rock_c)
-		var n: int = int(pal["rocks"]) / 3
-		mm.instance_count = n
-		for i in n:
-			var p := _scatter_point(FIELD_HALF - 1.0)
-			var s := _rng.randf_range(0.6, 2.4)
-			mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * s), p - Vector3(0, 0.15, 0)))
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.material_override = mat
-		add_child(mmi)
-	var ruins: int = pal["ruins"]
-	for i in ruins:
-		var mi := MeshInstance3D.new()
-		mi.mesh = Models.ruin(i)
-		mi.material_override = mat
-		var p: Vector3
-		if map_id == "shattered_ruins" and i % 2 == 0:
-			# scatter some ruins along the battlefield edges for atmosphere
-			var x := (FIELD_HALF + _rng.randf_range(0.0, 6.0)) * (1.0 if i % 4 == 0 else -1.0)
-			var z := _rng.randf_range(-90.0, -15.0)
-			p = Vector3(x, height_at(x, z), z)
-		else:
-			p = _scatter_point(FIELD_HALF + 1.0)
-		mi.position = p
-		mi.rotation.y = _rng.randf() * TAU
-		mi.scale = Vector3.ONE * _rng.randf_range(1.0, 1.8)
-		add_child(mi)
+	var rock_mat: Material = null
+	if map_id == "molten_abyss":
+		rock_mat = Assets.tinted(H + "rock_single_A.gltf", Color(0.3, 0.2, 0.18), 0.8)
+	for r in ["rock_single_A", "rock_single_B", "rock_single_C", "rock_single_D", "rock_single_E"]:
+		_scatter(H + r + ".gltf", int(pal["rocks"]) / 5, FIELD_HALF - 1.0, 4.0, 9.0, rock_mat)
+	# small rubble/props along the lane edges for detail
+	match map_id:
+		"verdant_pass":
+			_edge_props([H + "resource_lumber.gltf", H + "crate_A_big.gltf", H + "barrel.gltf", H + "tent.gltf", H + "weaponrack.gltf"], 18, 3.2)
+			Assets.place(self, H + "building_windmill_blue.gltf", Vector3(-34, height_at(-34, -60), -60), 6.0, 0.6)
+			Assets.place(self, H + "building_home_A_blue.gltf", Vector3(-30, height_at(-30, -48), -48), 5.0, 1.2)
+			Assets.place(self, H + "building_lumbermill_blue.gltf" if ResourceLoader.exists(Assets.ROOT + H + "building_lumbermill_blue.gltf") else H + "building_home_B_blue.gltf",
+				Vector3(32, height_at(32, -70), -70), 5.0, -0.8)
+		"molten_abyss":
+			_edge_props([DG + "rubble_large.glb", DG + "rubble_half.glb", HW + "skull.gltf", HW + "ribcage.gltf"], 26, 1.4)
+			_edge_props([H + "building_destroyed.gltf"], 6, 5.0)
+		"shattered_ruins":
+			_edge_props([HW + "grave_A.gltf", HW + "grave_B.gltf", HW + "gravestone.gltf", HW + "grave_A_destroyed.gltf", HW + "gravemarker_A.gltf"], 40, 1.3)
+			_edge_props([DG + "pillar.glb", DG + "column.glb", DG + "rubble_large.glb", DG + "wall_broken.glb"], 18, 1.6)
+			_edge_props([HW + "skull.gltf", HW + "ribcage.gltf", HW + "bone_A.gltf", HW + "fence_broken.gltf"], 24, 1.5)
+			_edge_props([HW + "lantern_standing.gltf", HW + "post_skull.gltf"], 10, 1.6)
+			_edge_props([H + "building_destroyed.gltf"], 8, 5.5)
+			Assets.place(self, HW + "crypt.gltf", Vector3(-30, height_at(-30, -70), -70), 1.4, 0.8)
+			Assets.place(self, HW + "arch_gate.gltf", Vector3(0, height_at(0, -98), -98), 2.4, 0.0)
+			Assets.place(self, HW + "shrine_candles.gltf", Vector3(28, height_at(28, -40), -40), 1.6, -0.6)
+		"skyspire_peaks":
+			_edge_props([H + "rock_single_B.gltf", H + "rock_single_C.gltf"], 20, 6.0, Assets.tinted(H + "rock_single_B.gltf", Color(1, 1, 1), 0.0, 1.0, 0.03))
+			_edge_props([H + "tent.gltf", H + "flag_blue.gltf", H + "crate_B_big.gltf"], 10, 3.5)
+
+
+func _edge_props(paths: Array, count: int, scl: float, mat: Material = null) -> void:
+	## Props just outside the lanes so the battlefield edges feel lived-in.
+	for i in count:
+		var side := 1.0 if _rng.randf() < 0.5 else -1.0
+		var x := side * _rng.randf_range(FIELD_HALF - 0.5, FIELD_HALF + 9.0)
+		var z := _rng.randf_range(-100.0, -12.0)
+		if height_at(x, z) < -0.6:
+			continue
+		var path: String = paths[i % paths.size()]
+		Assets.place(self, path, Vector3(x, height_at(x, z) - 0.05, z), scl * _rng.randf_range(0.8, 1.25), _rng.randf() * TAU, mat)
 
 
 func _build_ambient_particles() -> void:

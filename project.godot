@@ -9,7 +9,7 @@ config/name="Castle Dominion"
 config/description="Original 3D fantasy tower defense with permanent God Mode."
 config/version="0.1.0"
 run/main_scene="res://scenes/main_menu.tscn"
-config/features=PackedStringArray("4.3", "Mobile")
+config/features=PackedStringArray("4.5", "Mobile")
 config/icon="res://icon.svg"
 
 [autoload]

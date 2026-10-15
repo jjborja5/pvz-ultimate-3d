@@ -1,6 +1,7 @@
 class_name SpellSystem
 extends Node3D
-## Player-cast magic: Fireball, Chain Storm, Ice Storm and Meteor.
+## Player-cast magic: Fireball, Chain Storm, Ice Storm, Meteor, Meteor Rain, Firestorm,
+## Frost Nova and Divine Wrath.
 ## Cooldowns are skipped entirely while God Mode "no cooldowns" is on.
 
 signal cast_done(spell_id: String)
@@ -22,9 +23,17 @@ func setup(p_battle: Node) -> void:
 		cooldowns[id] = 0.0
 
 
-func ready_fraction(id: String) -> float:
+func cooldown_for(id: String) -> float:
 	var cd: float = GameData.SPELLS[id]["cooldown"]
-	return 1.0 - clampf(cooldowns.get(id, 0.0) / cd, 0.0, 1.0)
+	return cd * clampf(1.0 - battle.mod("spell_cd") - GameState.upgrade_value("spell_cooldown"), 0.2, 1.0)
+
+
+func power() -> float:
+	return 1.0 + battle.mod("spell") + GameState.upgrade_value("spell_power")
+
+
+func ready_fraction(id: String) -> float:
+	return 1.0 - clampf(cooldowns.get(id, 0.0) / cooldown_for(id), 0.0, 1.0)
 
 
 func can_cast(id: String) -> bool:
@@ -34,15 +43,39 @@ func can_cast(id: String) -> bool:
 func cast(id: String, point: Vector3) -> bool:
 	if not can_cast(id):
 		return false
-	var def: Dictionary = GameData.SPELLS[id]
-	cooldowns[id] = 0.0 if GameState.is_god("no_cooldowns") else float(def["cooldown"])
+	cooldowns[id] = 0.0 if GameState.is_god("no_cooldowns") else cooldown_for(id)
+	force_cast(id, point)
+	cast_done.emit(id)
+	return true
+
+
+func force_cast(id: String, point: Vector3) -> void:
+	## Cast without cooldown checks (used by combos and auto-blessings).
+	var def: Dictionary = (GameData.SPELLS[id] as Dictionary).duplicate()
+	def["damage"] = float(def["damage"]) * power()
 	match id:
 		"fireball": _fireball(point, def)
 		"lightning": _chain_storm(point, def)
 		"ice_storm": _ice_storm(point, def)
 		"meteor": _meteor(point, def)
-	cast_done.emit(id)
-	return true
+		"meteor_shower":
+			for i in int(def["count"]):
+				var p := point + Vector3(randf_range(-12, 12), 0, randf_range(-14, 14))
+				p.y = battle.world.height_at(p.x, p.z)
+				var d2 := def.duplicate()
+				get_tree().create_timer(i * 0.22, false).timeout.connect(func(): _meteor(p, d2, 0.6))
+		"firestorm":
+			HeroAbilities.fire_tornado(battle, point + Vector3(0, 0, -6), def["damage"], def["radius"], def["duration"])
+			HeroAbilities.fire_tornado(battle, point + Vector3(-5, 0, -10), def["damage"], def["radius"], def["duration"])
+		"frost_nova":
+			HeroAbilities.ice_spike_field(battle, point, def["radius"], def["damage"], 3.0)
+		"divine_wrath":
+			battle.flash_screen(Color(1.0, 0.95, 0.7), 0.8)
+			for i in 9:
+				var p2 := Vector3(randf_range(-12, 12), 0, randf_range(-70, -12))
+				p2.y = battle.world.height_at(p2.x, p2.z)
+				var dmg: float = def["damage"]
+				get_tree().create_timer(i * 0.12, false).timeout.connect(func(): HeroAbilities.light_pillar(battle, p2, 6.0, dmg))
 
 
 func _process(delta: float) -> void:
@@ -56,7 +89,7 @@ func _process(delta: float) -> void:
 		if s["tick"] <= 0.0:
 			s["tick"] = 0.25
 			for e in enemies.enemies_in_radius(s["pos"], s["radius"]):
-				enemies.damage(e, s["dps"] * 0.25, false)
+				enemies.damage(e, s["dps"] * 0.25, "ice", false, "spell")
 				enemies.apply_slow(e, 0.7, 1.0)
 				if randf() < 0.08:
 					enemies.apply_freeze(e, 1.0)
@@ -73,7 +106,7 @@ func _fireball(point: Vector3, def: Dictionary) -> void:
 	var radius: float = def["radius"]
 	var on_hit := func(p: Vector3, _t):
 		fx.explosion(p, radius, Color(1.0, 0.5, 0.1), true)
-		enemies.damage_radius(p, radius, dmg)
+		enemies.damage_radius(p, radius, dmg, "fire", true, "spell")
 		battle.shake(0.35)
 	projectiles.fire("fireball", from, null, 40.0, 6.0, on_hit, point)
 
@@ -97,7 +130,7 @@ func _chain_storm(point: Vector3, def: Dictionary) -> void:
 		last = nxt
 	fx.lightning(pts, Color(0.6, 0.75, 1.0), 0.6, 0.4)
 	for e in chain:
-		enemies.damage(e, def["damage"])
+		enemies.damage(e, def["damage"], "lightning", true, "spell")
 	battle.shake(0.2)
 
 
@@ -162,7 +195,7 @@ func _ice_storm(point: Vector3, def: Dictionary) -> void:
 		"dps": float(def["damage"]), "node": node})
 
 
-func _meteor(point: Vector3, def: Dictionary) -> void:
+func _meteor(point: Vector3, def: Dictionary, size := 1.0) -> void:
 	var radius: float = def["radius"]
 	var dmg: float = def["damage"]
 	var rock := MeshInstance3D.new()
@@ -183,6 +216,7 @@ func _meteor(point: Vector3, def: Dictionary) -> void:
 	add_child(rock)
 	var start := point + Vector3(-18, 45, -25)
 	rock.global_position = start
+	rock.scale = Vector3.ONE * size
 	# fiery trail
 	var trail := projectiles._trail(Color(1.0, 0.45, 0.1), 3.5)
 	trail.amount = int(90 * fx.quality())
@@ -204,5 +238,7 @@ func _meteor(point: Vector3, def: Dictionary) -> void:
 		fx.explosion(point, radius, Color(1.0, 0.4, 0.05), true)
 		fx.explosion(point + Vector3(2, 0, 1), radius * 0.6, Color(1.0, 0.6, 0.2), true)
 		fx.shockwave(point, radius * 1.4, Color(1.0, 0.6, 0.2, 0.9), 0.6)
-		enemies.damage_radius(point, radius, dmg)
-		battle.shake(0.9))
+		enemies.damage_radius(point, radius, dmg, "fire", true, "spell")
+		for e in enemies.enemies_in_radius(point, radius):
+			enemies.apply_burn(e, dmg * 0.04, 3.0)
+		battle.shake(0.9 * size))
