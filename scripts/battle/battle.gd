@@ -272,7 +272,7 @@ func _update_camera(delta: float) -> void:
 		var bp: Vector3 = bosses.cinematic_target.pos
 		var t := smoothstep(0.0, 1.0, _cine_blend)
 		look = look.lerp(bp + Vector3(0, 3.0, 0), t)
-		offset = offset.lerp(Vector3(6.0, 9.0, 16.0), t)
+		offset = offset.lerp(bosses.cinematic_offset, t)
 	var pos := look + offset
 	if _shake > 0.0:
 		pos += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * 0.6
@@ -643,8 +643,8 @@ func _on_enemy_killed(e: EnemyManager.Enemy) -> void:
 		shake(1.0)
 		run.gems_earned += 5
 		run.materials_earned += 3
-		hud.banner("TYRANT SLAIN!", Color(1, 0.85, 0.3))
-		flash_screen(Color(1, 0.9, 0.6), 0.4)
+		for h in heroes:
+			h.celebrate(2.5)
 	elif e.elite != "":
 		run.materials_earned += 1
 

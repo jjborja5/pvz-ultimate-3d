@@ -159,11 +159,13 @@ var _letterbox: Array = []
 var _boss_title: Label
 var _boss_sub: Label
 var _toasts: VBoxContainer
+var _row1: HBoxContainer
 
 
 func _build_spell_bar() -> void:
 	# --- row 1: hero ultimates, build button, next wave
 	var row1 := HBoxContainer.new()
+	_row1 = row1
 	row1.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	row1.offset_left = 10
 	row1.offset_right = -10
@@ -241,11 +243,12 @@ func _build_spell_bar() -> void:
 		bar.color = Color(0, 0, 0, 0.92)
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE if top else Control.PRESET_BOTTOM_WIDE)
-		bar.custom_minimum_size = Vector2(0, 150)
+		bar.custom_minimum_size = Vector2(0, 120 if top else 200)
 		if top:
-			bar.offset_bottom = 150
+			bar.offset_top = 0
+			bar.offset_bottom = 120
 		else:
-			bar.offset_top = -150
+			bar.offset_top = -200
 		bar.visible = false
 		add_child(bar)
 		_letterbox.append(bar)
@@ -253,8 +256,8 @@ func _build_spell_bar() -> void:
 	_boss_title.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_boss_title.offset_left = -360
 	_boss_title.offset_right = 360
-	_boss_title.offset_top = -280
-	_boss_title.offset_bottom = -200
+	_boss_title.offset_top = -330
+	_boss_title.offset_bottom = -250
 	_boss_title.add_theme_color_override("font_color", Color(1, 0.45, 0.3))
 	_boss_title.visible = false
 	_boss_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -263,8 +266,8 @@ func _build_spell_bar() -> void:
 	_boss_sub.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_boss_sub.offset_left = -360
 	_boss_sub.offset_right = 360
-	_boss_sub.offset_top = -205
-	_boss_sub.offset_bottom = -165
+	_boss_sub.offset_top = -255
+	_boss_sub.offset_bottom = -215
 	_boss_sub.visible = false
 	_boss_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_boss_sub)
@@ -703,11 +706,15 @@ func flash(color: Color, duration: float) -> void:
 	tw.tween_property(_flash_rect, "color:a", 0.0, duration)
 
 
-func boss_intro(name: String, epithet: String) -> void:
+func boss_intro(name: String, epithet: String, color := Color(1, 0.45, 0.3)) -> void:
+	_boss_title.add_theme_color_override("font_color", color)
 	for bar in _letterbox:
 		bar.visible = true
 		bar.modulate.a = 0.0
 		bar.create_tween().tween_property(bar, "modulate:a", 1.0, 0.3)
+	_row1.visible = false
+	_spell_row.visible = false
+	_hint.visible = false
 	_boss_title.text = name.to_upper()
 	_boss_sub.text = epithet
 	_boss_title.visible = true
@@ -720,7 +727,74 @@ func boss_intro(name: String, epithet: String) -> void:
 	tw.tween_property(_boss_title, "modulate:a", 1.0, 0.3)
 
 
+func boss_defeated(name: String) -> void:
+	## Reward celebration after a boss death sequence.
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+	var glow := TextureRect.new()
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 1.0])
+	g.colors = PackedColorArray([Color(1, 0.85, 0.4, 0.55), Color(1, 0.7, 0.2, 0.0)])
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	glow.texture = gt
+	glow.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	glow.offset_left = -360
+	glow.offset_right = 360
+	glow.offset_top = -420
+	glow.offset_bottom = 60
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(glow)
+	var t := UITheme.title("VICTORY OVER", 34)
+	t.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	t.offset_left = -360
+	t.offset_right = 360
+	t.offset_top = -280
+	t.offset_bottom = -235
+	t.add_theme_color_override("font_color", Color(1, 0.95, 0.8))
+	root.add_child(t)
+	var n := UITheme.title(name.to_upper(), 58)
+	n.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	n.offset_left = -360
+	n.offset_right = 360
+	n.offset_top = -235
+	n.offset_bottom = -165
+	root.add_child(n)
+	var rw := UITheme.label("Treasure chest  •  +5 gems  •  +3 materials", 24, UITheme.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	rw.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	rw.offset_left = -360
+	rw.offset_right = 360
+	rw.offset_top = -160
+	rw.offset_bottom = -125
+	root.add_child(rw)
+	var ic := IconArt.new("crown", 90)
+	ic.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	ic.offset_left = -45
+	ic.offset_right = 45
+	ic.offset_top = -380
+	ic.offset_bottom = -290
+	root.add_child(ic)
+	root.pivot_offset = Vector2(360, 300)
+	root.scale = Vector2(0.6, 0.6)
+	root.modulate.a = 0.0
+	var tw := root.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(root, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(root, "modulate:a", 1.0, 0.25)
+	tw.chain().tween_interval(2.4)
+	tw.chain().tween_property(root, "modulate:a", 0.0, 0.6)
+	tw.chain().tween_callback(root.queue_free)
+
+
 func boss_intro_end() -> void:
+	_row1.visible = true
+	_spell_row.visible = true
+	_hint.visible = true
 	for bar in _letterbox:
 		var tw: Tween = bar.create_tween()
 		tw.tween_property(bar, "modulate:a", 0.0, 0.3)
