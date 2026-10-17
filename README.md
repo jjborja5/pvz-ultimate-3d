@@ -3,9 +3,17 @@
 An original 3D fantasy tower-defense game for **Godot 4.5+ (GDScript)**, designed for portrait iPhone play with
 **permanent God Mode** enabled by default: no payments, ads, subscriptions or grinding.
 
-![Maps](docs/screenshots/p3_maps.png)
-![Combat](docs/screenshots/p3_combat.png)
-![Menus](docs/screenshots/p3_menus.png)
+![Maps](docs/screenshots/p4_maps.png)
+![Combat](docs/screenshots/p4_combat.png)
+![Spells](docs/screenshots/p4_spells.png)
+![Ultimates](docs/screenshots/p4_ultimates.png)
+![Bosses](docs/screenshots/p4_bosses.png)
+![Menus](docs/screenshots/p4_menus.png)
+
+Before (Phase 3, top) and after (Phase 4, bottom), same scene and camera:
+
+![Before and after](docs/screenshots/p4_before_after.png)
+![Before and after, close-up](docs/screenshots/p4_before_after_closeup.png)
 
 ## Running
 
@@ -31,6 +39,44 @@ the dragon, UI icons and all gameplay are original code. `tools/fetch_assets.sh`
 Horde rendering: rigged characters are baked by `UnitBaker` (CPU skinning) into walk, attack and death frame meshes,
 plus automatically decimated LOD frames. Hundreds of animated units then draw as one MultiMesh per (type, frame).
 
+## Phase 4: graphics, audio and animation
+
+| Area | What changed |
+|---|---|
+| **Castle and terrain** | World-space masonry shader (staggered bricks, mortar, per-stone colour variation, ground grime) on castle walls and towers; retuned key, fill and rim lighting; height fog; drifting cloud shadows; animated water and lava with fresnel and glints; weather particles per map (Medium and High only). |
+| **Spells (8)** | Fireball (fire core, smoke, scorch decal), Chain Storm (branching lightning arcs), Ice Storm (falling shards, frost decal), Meteor and Meteor Rain (rune warning circle, fiery trail, shockwave, ground cracks), Firestorm, Frost Nova (ice burst ring), Divine Wrath (light pillars). |
+| **Ultimates (9)** | Arrow Storm, Firestorm (shader-driven fire tornadoes), Glacial Spikes, Thunder Dome (energy dome shader), Divine Judgment, Wrath of the Grove, Army of the Dead, Mortar Barrage, Elder Dragon (flying dragon with fire-breath jet). |
+| **Bosses** | Each of the 4 bosses has its own colours, aura light and particles, camera framing and title colour. Cinematic intro with letterbox bars, name and epithet card, and slow motion. Signature attacks: molten rain slam, bone spikes, skeleton summon with soul shield, war-cry rally. At 50% HP they enrage: they grow, glow, speed up and attack faster. The death sequence plays chained explosions, a light pillar and slow motion, then a "Boss Defeated" reward banner. |
+| **Animation** | Units have baked walk, attack, hit-react, death and special frames. Heroes have idle, attack and cast animations and a victory celebration. Damage flashes, freeze tint and knockback on hits. |
+| **Audio** | 5 original music tracks (menu, battle, boss, victory, defeat) with crossfades, plus 43 original sound effects: swords, arrows, cannons, lightning, fire, ice, holy, nature, shadow, enemies, bosses, UI, loot and level-up. Separate Music and SFX volume sliders, a 20-voice pool and per-sound cooldowns so big fights never flood the mixer. Everything is synthesized by `tools/synth_audio.py` (numpy), so no third-party audio is used. |
+| **UI** | OFL fonts (Cinzel for titles, Fredoka for body text). Generated 9-slice panels with gradient, gloss, bevel and shadow. Hero portraits rendered from the actual 3D models. Screen vignette, tabbed God Mode dashboard, quality and FPS settings. |
+| **Performance** | Graphics presets (Low, Medium, High) for render scale, MSAA, shadows, particle budget, LOD distance and weather. Static props merged per material (`StaticBatcher`). Hordes drawn as one MultiMesh per animation frame, with decimated LOD frames and a cap on high-detail units. Blob shadows replace real shadows for units. Enemy queries use a spatial grid. Particles have a global budget. On-screen FPS overlay. |
+
+### Performance measurements
+
+Measured with `tests/benchmark.tscn` on Verdant Pass with all towers and defenses built, using the Mobile renderer
+at 540×960 on **lavapipe (a CPU software Vulkan rasterizer)**. Frame times from lavapipe say nothing about iPhone
+GPU speed. Draw calls, triangle counts and horde simulation cost are the useful numbers.
+
+| Quality | Enemies | Frame ms | Sim ms | Render-prep ms | Draw calls | Triangles | VRAM MB |
+|---|---|---|---|---|---|---|---|
+| Low | 99 | 343.5 | 1.64 | 1.73 | 415 | 522k | 302 |
+| Low | 295 | 389.2 | 4.82 | 3.13 | 437 | 956k | 307 |
+| Low | 590 | 437.6 | 8.26 | 5.83 | 470 | 1626k | 307 |
+| Medium | 98 | 789.4 | 2.03 | 1.95 | 620 | 807k | 323 |
+| Medium | 295 | 488.5 | 5.12 | 3.30 | 644 | 1291k | 323 |
+| Medium | 594 | 566.5 | 8.80 | 5.80 | 660 | 2050k | 323 |
+| High | 98 | 792.6 | 2.50 | 1.99 | 627 | 1026k | 330 |
+| High | 297 | 516.0 | 4.12 | 3.44 | 648 | 1543k | 330 |
+| High | 592 | 637.4 | 7.76 | 5.14 | 683 | 2357k | 335 |
+
+Before batching and blob shadows, the same High scene needed 883–964 draw calls. Most of the Low→Medium jump
+(about 200 draws) comes from the shadow pass. The rest comes from per-frame horde buckets, towers, FX meshes and
+hero parts.
+
+These numbers have **not** been measured on an iPhone. The first real-device pass should target Medium, since the
+draw-call count (415–683) is still above the roughly 300 that is comfortable on older iPhones.
+
 ## Feature status
 
 ### Done and covered by automated tests
@@ -52,10 +98,12 @@ plus automatically decimated LOD frames. Hundreds of animated units then draw as
 | **Phase 1 features** | 4 maps, 5 modes, 5 towers with 5 levels, wave system, save data: all kept. |
 
 ### Not done yet
-- Sound and music (Phase 4).
-- Hand-authored VFX textures and post-processing polish (Phase 4); current effects are procedural.
-- An iOS export preset and testing on a real device (Phase 6). Performance has only been measured on desktop/software rendering.
-- The Compatibility (OpenGL) renderer tints the horde shader incorrectly; the target Mobile (Vulkan/Metal) renderer is correct.
+- **iPhone not verified.** There is no iOS export preset yet and nothing has been tested on a real device. All rendering was tested on a CPU software rasterizer.
+- Draw calls (about 415–683 depending on preset and horde size) are still higher than ideal for older iPhones. Next steps: fewer environment shadow casters on Medium, merging hero parts, quantizing attack frames to cut MultiMesh buckets.
+- Automated tests share the game's save file, so running them adds test items (for example, duplicate legendaries) to the local inventory.
+- The music and SFX are procedurally synthesized. They fit the game but are not studio-produced orchestral recordings.
+- Characters use baked animation frames: the hordes run at about 10–15 animation fps by design, and heroes have no blended transitions between clips.
+- The Compatibility (OpenGL) renderer tints the horde shader incorrectly. The target Mobile (Vulkan/Metal) renderer is correct.
 
 ## Tests
 
@@ -65,19 +113,24 @@ godot --headless res://tests/compile_check.tscn   # compiles every script
 godot --headless res://tests/smoke_test.tscn      # core gameplay + God Mode
 godot --headless res://tests/phase3_test.tscn     # heroes, defenses, blessings, loot, bosses, equipment, saves (52 checks)
 godot --headless res://tests/modes_test.tscn      # menu + every mode on every map
+godot --headless res://tests/phase4_test.tscn     # audio files/buses/volumes, quality presets, batching, grid, boss sequence
 tests/shoot.sh <out_dir> <map> <battle|menu|heroes>   # real-renderer screenshots (xvfb + lavapipe Vulkan)
+# fx_showcase / boss_showcase / benchmark: run with xvfb + lavapipe like shoot.sh, passing an output path after --
 ```
 
 ## Layout
 
 ```
 assets/kaykit/      CC0 KayKit models (characters, hexagon, dungeon, halloween) + licences
-scripts/autoload/   game_data.gd (all content definitions), game_state.gd (progression, God Mode, saves)
-scripts/core/       unit_baker (animation baking), assets, models (procedural), loot, hero_stats, mesh_kit
+scripts/autoload/   game_data.gd (content), game_state.gd (progression, God Mode, settings, saves), audio.gd
+scripts/core/       unit_baker (animation baking), assets, static_batcher, fx_textures, models, loot, hero_stats, mesh_kit
 scripts/battle/     battle, world_builder, castle, enemy_manager, tower, hero, hero_abilities, defenses,
                     run_state, loot_drops, boss_director, spell_system, projectile_system, wave_manager, fx
-scripts/ui/         hud, god_panel, main_menu, hero_preview, ui_theme, icon_art
-shaders/            unit_tex (horde), prop_tex, terrain, force_field, liquid, bar, hpbar, prop, unit
-tools/              fetch_assets.sh
-tests/              compile_check, smoke_test, phase3_test, modes_test, screenshot, closeup, hero_lineup
+scripts/ui/         hud, god_panel, main_menu, hero_preview, hero_portraits, ui_theme, icon_art
+shaders/            unit_tex (horde), prop_tex (masonry), terrain, liquid, explosion, shield, tornado, force_field, bar, hpbar, prop, unit
+assets/audio/       original music + SFX (generated by tools/synth_audio.py)
+assets/fonts/       Cinzel + Fredoka (SIL OFL)
+tools/              fetch_assets.sh, synth_audio.py
+tests/              compile_check, smoke_test, phase3_test, phase4_test, modes_test, benchmark, screenshot,
+                    fx_showcase, boss_showcase, closeup, hero_lineup
 ```

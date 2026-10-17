@@ -45,9 +45,11 @@ func _ready() -> void:
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.offset_left = -340
 	_hint.offset_right = 340
-	_hint.offset_top = -250
-	_hint.offset_bottom = -210
+	_hint.offset_top = -312
+	_hint.offset_bottom = -272
 	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hint.add_theme_constant_override("outline_size", 8)
+	_hint.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.1, 0.9))
 	add_child(_hint)
 
 
@@ -416,14 +418,17 @@ func banner(text: String, color := UITheme.GOLD) -> void:
 
 # ------------------------------------------------------------------ sheets
 
-func close_sheet() -> void:
+func close_sheet(silent := false) -> void:
 	if _sheet:
+		if not silent:
+			Audio.sfx("ui_back", -8.0, 0.03, 0.05)
 		_sheet.queue_free()
 		_sheet = null
 
 
 func _new_sheet(title_text: String) -> VBoxContainer:
-	close_sheet()
+	close_sheet(true)
+	Audio.sfx("ui_open", -8.0, 0.03, 0.05)
 	_sheet = PanelContainer.new()
 	_sheet.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_sheet.offset_left = 12
@@ -515,6 +520,7 @@ func show_tower_sheet(t: Tower) -> void:
 # ------------------------------------------------------------------ modals
 
 func open_god_panel() -> void:
+	Audio.sfx("ui_open", -6.0, 0.0, 0.05)
 	var gp := GodPanel.new()
 	gp.battle = battle
 	add_child(gp)
@@ -714,7 +720,7 @@ func loot_toast(item: Dictionary) -> void:
 
 
 func flash(color: Color, duration: float) -> void:
-	_flash_rect.color = Color(color.r, color.g, color.b, 0.55)
+	_flash_rect.color = Color(color.r, color.g, color.b, 0.35)
 	var tw := _flash_rect.create_tween()
 	tw.tween_property(_flash_rect, "color:a", 0.0, duration)
 

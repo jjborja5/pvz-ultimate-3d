@@ -48,6 +48,8 @@ func _process(d):
 	elif cur != "":
 		var wait := 0.3
 		if cur.contains("meteor"): wait = 1.0
+		if cur.contains("fireball"): wait = 0.75
+		if cur.contains("lightning"): wait = 0.1
 		if cur.contains("dragon"): wait = 1.6
 		if cur.contains("storm_sorcerer") or cur.contains("archer"): wait = 0.8
 		if cur.contains("divine_wrath") or cur.contains("firestorm") or cur.contains("fire_mage"): wait = 0.9

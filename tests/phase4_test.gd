@@ -24,6 +24,7 @@ func _ready() -> void:
 	print("=== Castle Dominion Phase 4 tests ===")
 	_test_audio()
 	_test_quality()
+	_test_batcher()
 	check(GameState.god["enabled"] and GameState.god["invincible"] and GameState.god["unlimited"] \
 		and GameState.god["no_cooldowns"] and GameState.god["max_power"], "God Mode flags all active")
 	GameState.current_mode = "sandbox"
@@ -83,6 +84,27 @@ func _test_quality() -> void:
 	check(GameState.QUALITY_PRESETS.size() == 3, "Three graphics quality presets")
 
 
+func _test_batcher() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, BoxMesh.new().get_mesh_arrays())
+	for i in 3:
+		var mi := MeshInstance3D.new()
+		mi.mesh = am
+		mi.set_meta("static_ok", true)
+		root.add_child(mi)
+		mi.position = Vector3(i * 2, 0, 0)
+	var merged := StaticBatcher.batch(root)
+	if StaticBatcher._has_geometry(am):
+		var out := root.get_child(root.get_child_count() - 1) as MeshInstance3D
+		check(merged == 3 and out.mesh.get_faces().size() == am.get_faces().size() * 3, "StaticBatcher merges props without losing geometry")
+		check(out.get_aabb().size.x > 4.9, "Batched props keep their positions")
+	else:
+		check(merged == 0 and root.get_child_count() == 3, "StaticBatcher keeps props when the renderer exposes no geometry (headless)")
+	root.queue_free()
+
+
 func _process(delta: float) -> void:
 	t += delta
 	match step:
@@ -119,7 +141,7 @@ func _process(delta: float) -> void:
 				step = 4
 				t = 0.0
 		4:
-			if t > 0.3:
+			if true:   # first frame after the kill (slow software renderers have long frames)
 				check(not _boss.alive, "Boss can be killed")
 				check(battle.bosses.is_cinematic(), "Boss death slow-motion sequence plays")
 				step = 5

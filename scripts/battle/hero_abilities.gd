@@ -6,13 +6,12 @@ extends RefCounted
 
 static var _ice_mat: StandardMaterial3D
 static var _root_mat: StandardMaterial3D
-static var _beam_mat: StandardMaterial3D
 
 
 static func cast(hero: Hero, ability_id: String) -> void:
 	var b: Node = hero.battle
 	var snd := {"arrow_storm": "arrow_shoot", "firestorm": "fire_roar", "glacial_spikes": "ice_cast", "thunder_dome": "lightning",
-		"divine_judgment": "holy_cast", "wrath_of_grove": "nature_cast", "army_of_dead": "summon", "mortar_barrage": "cannon_fire",
+		"divine_judgment": "holy_cast", "wrath_of_grove": "nature_cast", "army_of_dead": "shadow_cast", "mortar_barrage": "cannon_fire",
 		"elder_dragon": "dragon_roar"}
 	Audio.sfx(snd.get(ability_id, "magic_cast"), 2.0, 0.03, 0.0)
 	Audio.sfx("magic_cast", -6.0, 0.05, 0.0)
@@ -235,21 +234,17 @@ static func thunder_dome(b: Node, dmg: float, bolts: int, duration: float) -> vo
 
 # ------------------------------------------------------------------ light pillar
 
-static func light_pillar(b: Node, center: Vector3, radius: float, dmg: float) -> void:
-	if _beam_mat == null:
-		_beam_mat = StandardMaterial3D.new()
-		_beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_beam_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		_beam_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var mat: StandardMaterial3D = _beam_mat.duplicate()
-	mat.albedo_color = Color(1.6, 1.3, 0.6, 0.9)
+static func light_pillar(b: Node, center: Vector3, radius: float, dmg: float, screen_flash := true) -> void:
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/beam.gdshader")
 	var beam := MeshInstance3D.new()
 	var c := CylinderMesh.new()
-	c.top_radius = radius * 0.7
-	c.bottom_radius = radius * 0.5
+	c.top_radius = radius * 0.55
+	c.bottom_radius = radius * 0.4
 	c.height = 60.0
-	c.radial_segments = 24
+	c.radial_segments = 20
+	c.cap_top = false
+	c.cap_bottom = false
 	beam.mesh = c
 	beam.material_override = mat
 	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -258,15 +253,16 @@ static func light_pillar(b: Node, center: Vector3, radius: float, dmg: float) ->
 	beam.scale = Vector3(0.05, 1, 0.05)
 	var tw := beam.create_tween()
 	tw.tween_property(beam, "scale", Vector3(1, 1, 1), 0.25).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(0.5)
-	tw.tween_property(mat, "albedo_color:a", 0.0, 0.6)
+	tw.tween_interval(0.45)
+	tw.tween_method(func(v: float): mat.set_shader_parameter("fade", v), 1.0, 0.0, 0.5)
 	tw.tween_callback(beam.queue_free)
 	b.fx.rune_circle(center, radius, Color(1.0, 0.85, 0.4), 1.4)
 	b.fx.decal("crack", center, radius * 2.2, Color(1, 1, 1, 0.9), 6.0)
 	b.fx.explosion(center, radius, Color(1.0, 0.85, 0.4), true)
 	b.fx.shockwave(center, radius * 1.3, Color(1.0, 0.9, 0.5, 0.9), 0.6)
-	b.fx.flash_light(center + Vector3(0, 6, 0), Color(1.0, 0.9, 0.6), 12.0, radius * 4.0, 1.0)
-	b.flash_screen(Color(1.0, 0.95, 0.7), 0.35)
+	b.fx.flash_light(center + Vector3(0, 6, 0), Color(1.0, 0.9, 0.6), 6.0, radius * 3.0, 0.8)
+	if screen_flash:
+		b.flash_screen(Color(1.0, 0.95, 0.7), 0.25)
 	b.shake(0.6)
 	b.enemies.damage_radius(center, radius, dmg, "holy", true, "ability")
 

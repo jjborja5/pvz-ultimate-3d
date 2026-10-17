@@ -14,6 +14,8 @@ static func batch(root: Node3D) -> int:
 		var mi := c as MeshInstance3D
 		if mi == null or not mi.has_meta("static_ok") or not mi.visible or mi.mesh == null:
 			continue
+		if _uses_model_space(mi.material_override):
+			continue   # snow line is in model space; merging would move it
 		if not _has_geometry(mi.mesh):
 			continue   # headless/dummy renderer returns no surface data: keep the original node
 		var xf := root_inv * mi.global_transform
@@ -26,23 +28,26 @@ static func batch(root: Node3D) -> int:
 					"uvs": PackedVector2Array(), "idx": PackedInt32Array(), "shadow": mi.cast_shadow}
 			var g: Dictionary = groups[key]
 			var a := mi.mesh.surface_get_arrays(s)
+			# Packed arrays are values: read, append, then write back to the dictionary.
+			var gv: PackedVector3Array = g["verts"]
+			var gn: PackedVector3Array = g["norms"]
+			var guv: PackedVector2Array = g["uvs"]
+			var gi: PackedInt32Array = g["idx"]
 			var v: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
-			var base: int = (g["verts"] as PackedVector3Array).size()
-			(g["verts"] as PackedVector3Array).append_array(xf * v)
+			var base := gv.size()
+			gv.append_array(xf * v)
 			var n = a[Mesh.ARRAY_NORMAL]
 			if n == null:
 				n = PackedVector3Array()
 				n.resize(v.size())
 				n.fill(Vector3.UP)
-			var tn: PackedVector3Array = Transform3D(nb, Vector3.ZERO) * (n as PackedVector3Array)
-			(g["norms"] as PackedVector3Array).append_array(tn)
+			gn.append_array(Transform3D(nb, Vector3.ZERO) * (n as PackedVector3Array))
 			var uv = a[Mesh.ARRAY_TEX_UV]
 			if uv == null or (uv as PackedVector2Array).size() != v.size():
 				uv = PackedVector2Array()
 				uv.resize(v.size())
-			(g["uvs"] as PackedVector2Array).append_array(uv)
+			guv.append_array(uv)
 			var ind = a[Mesh.ARRAY_INDEX]
-			var gi: PackedInt32Array = g["idx"]
 			if ind == null:
 				for i in v.size():
 					gi.append(base + i)
@@ -51,6 +56,9 @@ static func batch(root: Node3D) -> int:
 				for i in shifted.size():
 					shifted[i] += base
 				gi.append_array(shifted)
+			g["verts"] = gv
+			g["norms"] = gn
+			g["uvs"] = guv
 			g["idx"] = gi
 		merged.append(mi)
 	if merged.size() < 2:
@@ -79,6 +87,14 @@ static func batch(root: Node3D) -> int:
 	for mi in merged:
 		mi.queue_free()
 	return merged.size()
+
+
+static func _uses_model_space(mat: Material) -> bool:
+	var sm := mat as ShaderMaterial
+	if sm == null:
+		return false
+	var snow = sm.get_shader_parameter("snow")
+	return snow != null and float(snow) > 0.0
 
 
 static func _has_geometry(m: Mesh) -> bool:

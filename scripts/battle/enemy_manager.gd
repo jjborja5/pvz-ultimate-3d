@@ -321,6 +321,7 @@ func _process(delta: float) -> void:
 				e.atk_cd = 1.0 / e.attack_rate
 				if e.blocked_by != null:
 					blocker_hit.emit(e.blocked_by, e.damage, e)
+					Audio.sfx("sword_hit", -12.0, 0.1, 0.12)
 				elif e.ranged > 0.0:
 					ranged_attack.emit(e)
 				else:

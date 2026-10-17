@@ -74,12 +74,12 @@ func force_cast(id: String, point: Vector3) -> void:
 		"frost_nova":
 			HeroAbilities.ice_spike_field(battle, point, def["radius"], def["damage"], 3.0)
 		"divine_wrath":
-			battle.flash_screen(Color(1.0, 0.95, 0.7), 0.8)
+			battle.flash_screen(Color(1.0, 0.95, 0.7), 0.4)
 			for i in 9:
 				var p2 := Vector3(randf_range(-12, 12), 0, randf_range(-70, -12))
 				p2.y = battle.world.height_at(p2.x, p2.z)
 				var dmg: float = def["damage"]
-				get_tree().create_timer(i * 0.12, false).timeout.connect(func(): HeroAbilities.light_pillar(battle, p2, 6.0, dmg))
+				get_tree().create_timer(i * 0.12, false).timeout.connect(func(): HeroAbilities.light_pillar(battle, p2, 6.0, dmg, false))
 
 
 func _process(delta: float) -> void:
@@ -241,6 +241,7 @@ func _meteor(point: Vector3, def: Dictionary, size := 1.0) -> void:
 	tw.tween_property(rock, "rotation", Vector3(4, 6, 2), 0.9)
 	tw.chain().tween_callback(func():
 		rock.queue_free()
+		Audio.sfx("meteor_impact", 1.0, 0.06, 0.05)
 		fx.explosion(point, radius, Color(1.0, 0.4, 0.05), true)
 		fx.explosion(point + Vector3(2, 0, 1), radius * 0.6, Color(1.0, 0.6, 0.2), true)
 		fx.shockwave(point, radius * 1.4, Color(1.0, 0.6, 0.2, 0.9), 0.6)
