@@ -41,6 +41,9 @@ func _ready() -> void:
 	close.pressed.connect(_close)
 	header.add_child(close)
 	outer.add_child(header)
+	_tabs = HBoxContainer.new()
+	_tabs.add_theme_constant_override("separation", 6)
+	outer.add_child(_tabs)
 	_status = UITheme.label("", 20, Color(0.7, 1.0, 0.7), HORIZONTAL_ALIGNMENT_CENTER)
 	outer.add_child(_status)
 	var scroll := ScrollContainer.new()
@@ -153,6 +156,7 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 30)
 	list.add_child(spacer)
+	_paginate(list)
 	_refresh()
 	# pop-in animation
 	panel.pivot_offset = Vector2(340, 600)
@@ -163,8 +167,50 @@ func _ready() -> void:
 	tw.tween_property(panel, "modulate:a", 1.0, 0.2)
 
 
+var _tabs: HBoxContainer
+var _pages: Array = []
+var _tab_buttons: Array = []
+
+
+func _paginate(list: VBoxContainer) -> void:
+	## Groups the sections into tab pages (one visible at a time).
+	var page: VBoxContainer = null
+	for c in list.get_children():
+		if c.has_meta("section"):
+			page = VBoxContainer.new()
+			page.add_theme_constant_override("separation", 10)
+			page.set_meta("title", c.get_meta("section"))
+			_pages.append(page)
+		if page:
+			list.remove_child(c)
+			page.add_child(c)
+	for pg in _pages:
+		list.add_child(pg)
+	var short := {"POWERS": "Powers", "TUNING": "Tuning", "BATTLE ACTIONS": "Battle", "WORLD": "World", "PROGRESSION": "Unlocks"}
+	for i in _pages.size():
+		var title: String = _pages[i].get_meta("title")
+		var b := UITheme.button(short.get(title, title), UITheme.PURPLE, Vector2(0, 58))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 19)
+		var idx: int = i
+		b.pressed.connect(func(): _show_page(idx))
+		_tabs.add_child(b)
+		_tab_buttons.append(b)
+	_show_page(2 if battle != null else 0)
+
+
+func _show_page(i: int) -> void:
+	for k in _pages.size():
+		_pages[k].visible = k == i
+		var b: Button = _tab_buttons[k]
+		var col := Color(0.62, 0.42, 0.08) if k == i else UITheme.PURPLE
+		b.add_theme_stylebox_override("normal", UITheme.box(col))
+		b.add_theme_stylebox_override("hover", UITheme.box(col.lightened(0.15), UITheme.GOLD.lightened(0.2)))
+
+
 func _section(parent: Control, text: String) -> void:
 	var l := UITheme.label(text, 24, UITheme.GOLD)
+	l.set_meta("section", text)
 	l.add_theme_constant_override("outline_size", 8)
 	parent.add_child(l)
 	var line := ColorRect.new()

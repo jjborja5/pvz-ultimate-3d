@@ -70,6 +70,12 @@ func _process(delta: float) -> void:
 				if b["shield_t"] <= 0.0:
 					b["shield_t"] = 14.0
 					e.immune_t = 3.0
+					var holder := Node3D.new()
+					battle.add_child(holder)
+					holder.global_position = e.pos
+					fx.shield(holder, e.scale * 1.6, Color(0.3, 0.9, 1.0), 3.0, Vector3(0, e.scale * 1.2, 0))
+					holder.create_tween().tween_interval(3.6)
+					get_tree().create_timer(3.6, false).timeout.connect(holder.queue_free)
 					Audio.sfx("shield_up", 0.0, 0.0, 0.0)
 					fx.shockwave(e.pos, 4.0, Color(0.3, 0.9, 1.0, 0.8), 0.6)
 					battle.hud.show_hint("Vael'Zhur raises a soul shield!")
@@ -81,6 +87,7 @@ func _process(delta: float) -> void:
 					for o in enemies.enemies_in_radius(e.pos, 16.0):
 						o.haste_t = 4.0
 					fx.shockwave(e.pos, 16.0, Color(1.0, 0.2, 0.15, 0.8), 0.8)
+					fx.rune_circle(e.pos, 7.0, Color(1.0, 0.15, 0.1), 1.6)
 					fx.flash_light(e.pos + Vector3(0, 4, 0), Color(1, 0.2, 0.1), 6.0, 20.0, 0.8)
 					battle.hud.show_hint("The Warlord rallies his troops!")
 
@@ -90,6 +97,7 @@ func _slam(e: EnemyManager.Enemy) -> void:
 	e.special_t = 1.6
 	var r := 9.0
 	fx.explosion(e.pos, r * 0.6, Color(0.75, 0.6, 0.45), true)
+	fx.decal("crack", e.pos, r * 2.4, Color(1, 1, 1, 1), 8.0)
 	fx.shockwave(e.pos, r, Color(1.0, 0.6, 0.3, 0.9), 0.5)
 	battle.shake(0.8)
 	for d in battle.defenses.defenses.duplicate():
@@ -118,3 +126,4 @@ func _summon(e: EnemyManager.Enemy) -> void:
 			s.pos.z = z
 			fx.soul_puff(s.pos, Color(0.3, 1.0, 0.9))
 	fx.shockwave(e.pos, 5.0, Color(0.3, 1.0, 0.9, 0.8), 0.6)
+	fx.rune_circle(e.pos, 5.0, Color(0.3, 1.0, 0.9), 1.8)

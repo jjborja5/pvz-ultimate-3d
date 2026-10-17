@@ -195,6 +195,7 @@ func _ice_storm(point: Vector3, def: Dictionary) -> void:
 	l.position = Vector3(0, 3, 0)
 	node.add_child(l)
 	fx.frost_burst(point, radius)
+	fx.decal("frost", point, radius * 2.4, Color(1, 1, 1, 1), float(def["duration"]) + 1.5, 1.0)
 	_storms.append({"pos": point, "radius": radius, "t": float(def["duration"]), "tick": 0.0,
 		"dps": float(def["damage"]), "node": node})
 
@@ -232,7 +233,8 @@ func _meteor(point: Vector3, def: Dictionary, size := 1.0) -> void:
 	l.omni_range = 18.0
 	rock.add_child(l)
 	# warning ring at the impact site
-	fx.shockwave(point, radius, Color(1.0, 0.3, 0.05, 0.6), 0.9)
+	fx.rune_circle(point, radius, Color(1.0, 0.35, 0.05), 1.0)
+	Audio.sfx("meteor_fall", -2.0, 0.05, 0.0)
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(rock, "global_position", point, 0.9).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)

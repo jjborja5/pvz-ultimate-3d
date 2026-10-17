@@ -35,6 +35,7 @@ func _ready() -> void:
 	add_child(camera)
 	camera.make_current()
 	fx.camera = camera
+	await HeroPortraits.generate_missing(self)
 	_build_ui()
 	Audio.play_music("menu")
 	GameState.god_changed.connect(func(_k): _refresh_currencies())
@@ -215,7 +216,7 @@ func _show_home() -> void:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		for st in ["normal", "hover", "pressed"]:
-			var sb: StyleBoxFlat = b.get_theme_stylebox(st).duplicate()
+			var sb: StyleBox = b.get_theme_stylebox(st).duplicate()
 			sb.content_margin_left = 78
 			b.add_theme_stylebox_override(st, sb)
 		var ic := IconArt.new(it[1], 50)
@@ -527,6 +528,7 @@ func _show_heroes() -> void:
 		var si: int = i
 		sb.pressed.connect(func():
 			GameState.set_skin(id, si)
+			await HeroPortraits.generate_missing(self)
 			_show_heroes())
 		skins.add_child(sb)
 	# team
@@ -562,8 +564,8 @@ func _show_heroes() -> void:
 		hb.add_theme_stylebox_override("normal", UITheme.box(Color(hc.r * 0.2, hc.g * 0.2, hc.b * 0.25), Color.WHITE if hid == id else hc.darkened(0.3), 16, 4 if hid == id else 2))
 		hb.add_theme_stylebox_override("hover", UITheme.box(Color(hc.r * 0.3, hc.g * 0.3, hc.b * 0.35), hc, 16, 3))
 		UITheme.juice(hb)
-		var ic := IconArt.new(BattleHUD.HERO_ICONS[hid], 52)
-		ic.position = Vector2(8, 8)
+		var ic := UITheme.portrait(hid, 56)
+		ic.position = Vector2(8, 6)
 		hb.add_child(ic)
 		var nl := UITheme.label(hd["class"], 17, hc.lightened(0.3))
 		nl.position = Vector2(8, 64)
@@ -597,8 +599,12 @@ func _show_equipment() -> void:
 	body.add_child(scroll)
 	for hid in GameData.HERO_ORDER:
 		var hc: Color = GameData.HEROES[hid]["color"]
-		var hb := UITheme.button(String(GameData.HEROES[hid]["class"]).get_slice(" ", 0), hc.darkened(0.6 if hid != _sel_hero else 0.25), Vector2(118, 80))
+		var hb := UITheme.button(String(GameData.HEROES[hid]["class"]).get_slice(" ", 0), hc.darkened(0.6 if hid != _sel_hero else 0.25), Vector2(176, 84))
 		hb.add_theme_font_size_override("font_size", 17)
+		hb.alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var pt := UITheme.portrait(hid, 62, false)
+		pt.position = Vector2(8, 11)
+		hb.add_child(pt)
 		hb.pressed.connect(func():
 			_sel_hero = hid
 			_show_equipment())

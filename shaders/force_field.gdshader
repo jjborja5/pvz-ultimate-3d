@@ -19,7 +19,7 @@ void fragment() {
 	vec2 uv = UV;
 	float edges = hex_edge(uv * vec2(6.0, 3.0) + vec2(0.0, TIME * 0.15));
 	float wave = 0.5 + 0.5 * sin(uv.y * 18.0 - TIME * 4.0);
-	float fade = smoothstep(0.0, 0.15, uv.y) * smoothstep(1.0, 0.7, uv.y) * smoothstep(0.0, 0.05, uv.x) * smoothstep(1.0, 0.95, uv.x);
+	float fade = smoothstep(0.0, 0.15, uv.y) * (1.0 - smoothstep(0.7, 1.0, uv.y)) * smoothstep(0.0, 0.05, uv.x) * (1.0 - smoothstep(0.95, 1.0, uv.x));
 	float a = (0.12 + edges * 0.55 + wave * 0.08 + hit * 0.6) * fade;
 	ALBEDO = color * (1.2 + hit * 2.0);
 	ALPHA = a;

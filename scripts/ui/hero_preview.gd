@@ -67,17 +67,12 @@ func _ready() -> void:
 		show_hero(_hero_id)
 
 
-func show_hero(id: String) -> void:
-	_hero_id = id
-	if _pivot == null:
-		return
-	if _model:
-		_model.queue_free()
+static func build_model(id: String) -> Node3D:
+	## Hero model with its weapons, tint and current skin applied (shared with portraits).
 	var def: Dictionary = GameData.HEROES[id]
-	_model = Assets.instance("characters/%s.glb" % def["model"])
-	_pivot.add_child(_model)
+	var model := Assets.instance("characters/%s.glb" % def["model"])
 	var sc: Vector3 = def.get("scale", Vector3.ONE)
-	_model.scale = sc
+	model.scale = sc
 	var skin: Dictionary = GameData.SKINS[int(GameState.heroes[id].get("skin", 0))]
 	var tint: Color = def["tint"]
 	var amount: float = def["tint_amount"]
@@ -85,7 +80,7 @@ func show_hero(id: String) -> void:
 		tint = skin["tint"]
 		amount = skin["amount"]
 	var mat: ShaderMaterial = null
-	for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		if mi.skin == null and not (def["keep"] as Array).has(String(mi.name)):
 			mi.visible = false
 			continue
@@ -99,6 +94,17 @@ func show_hero(id: String) -> void:
 			mat.set_shader_parameter("emissive_body", skin["glow"])
 			mat.set_shader_parameter("rim_strength", 0.5)
 		mi.material_override = mat
+	return model
+
+
+func show_hero(id: String) -> void:
+	_hero_id = id
+	if _pivot == null:
+		return
+	if _model:
+		_model.queue_free()
+	_model = build_model(id)
+	_pivot.add_child(_model)
 	_anim = _model.find_child("AnimationPlayer", true, false)
 	_anim_i = 0
 	_t = 0.0

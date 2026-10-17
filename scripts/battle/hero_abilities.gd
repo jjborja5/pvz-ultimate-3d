@@ -37,6 +37,8 @@ static func cast(hero: Hero, ability_id: String) -> void:
 				var p := Vector3(-13.0 + i * 2.0, 0, -6.0 - randf() * 3.0)
 				p.y = b.world.height_at(p.x, p.z)
 				b.enemies.spawn_ally(p, dmg, 12.0)
+				if i % 2 == 0:
+					b.fx.rune_circle(p, 2.0, Color(0.3, 1.0, 1.0), 1.5)
 			b.fx.flash_light(Vector3(0, 3, -6), Color(0.3, 1.0, 1.0), 6.0, 25.0, 1.0)
 		"mortar_barrage": mortar_barrage(b, hero.muzzle(), center, dmg, 12, a["radius"])
 		"elder_dragon":
@@ -97,26 +99,53 @@ static func fire_tornado(b: Node, start: Vector3, dmg: float, radius: float, dur
 	sct.curve = sc
 	pm.scale_curve = sct
 	p.process_material = pm
-	p.amount = int(220 * b.fx.quality())
-	p.lifetime = 1.4
+	p.amount = int(110 * b.fx.quality())
+	p.lifetime = 1.3
 	var q := QuadMesh.new()
-	q.size = Vector2(1.4, 1.4)
-	q.material = b.fx.additive_material(Color(2.4, 1.5, 0.8))
+	q.size = Vector2(1.1, 1.1)
+	q.material = b.fx.additive_material(Color(1.5, 0.95, 0.5), true, "puff")
 	p.draw_pass_1 = q
 	p.visibility_aabb = AABB(Vector3(-8, -2, -8), Vector3(16, 20, 16))
 	node.add_child(p)
+	var vortex := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 2.6
+	cone.bottom_radius = 0.7
+	cone.height = 9.0
+	cone.radial_segments = 20
+	cone.cap_top = false
+	cone.cap_bottom = false
+	vortex.mesh = cone
+	var vm := ShaderMaterial.new()
+	vm.shader = load("res://shaders/tornado.gdshader")
+	vm.set_shader_parameter("noise_tex", FXTextures.get_tex("noise"))
+	vortex.material_override = vm
+	vortex.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	vortex.position.y = 4.5
+	node.add_child(vortex)
+	var inner := vortex.duplicate() as MeshInstance3D
+	inner.scale = Vector3(0.6, 0.95, 0.6)
+	node.add_child(inner)
+	vortex.create_tween().set_loops().tween_property(vortex, "rotation:y", TAU, 0.6).as_relative()
+	inner.create_tween().set_loops().tween_property(inner, "rotation:y", -TAU, 0.45).as_relative()
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.5, 0.15)
 	l.light_energy = 4.0
 	l.omni_range = 12.0
 	l.position.y = 3.0
 	node.add_child(l)
+	for k in int(duration / 0.8):
+		b.get_tree().create_timer(k * 0.8, false).timeout.connect(func():
+			if is_instance_valid(node):
+				b.fx.decal("scorch", node.global_position, 4.0, Color(1, 1, 1, 0.75), 5.0))
 	var end := Vector3(start.x * 0.6, 0, -8.0)
 	var tw := node.create_tween()
 	tw.tween_property(node, "global_position", Vector3(end.x, 0, end.z), duration).set_trans(Tween.TRANS_SINE)
 	tw.tween_callback(func():
 		p.emitting = false
-		l.queue_free())
+		l.queue_free()
+		vortex.queue_free()
+		inner.queue_free())
 	tw.tween_interval(1.5)
 	tw.tween_callback(node.queue_free)
 	var ticks := int(duration / 0.25)
@@ -171,6 +200,8 @@ static func ice_spike_field(b: Node, center: Vector3, radius: float, dmg: float,
 		tw.tween_interval(r / radius * 0.35)
 		tw.tween_property(mi, "global_position:y", p.y + 1.8 + s * 0.5, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	b.fx.frost_burst(center, radius)
+	b.fx.decal("frost", center, radius * 2.6, Color(1, 1, 1, 1), freeze + 2.0, 1.2)
+	b.fx.rune_circle(center, radius, Color(0.5, 0.85, 1.0), 1.2)
 	b.fx.shockwave(center, radius, Color(0.6, 0.9, 1.0, 0.8), 0.5)
 	b.fx.flash_light(center + Vector3(0, 4, 0), Color(0.5, 0.8, 1.0), 6.0, radius * 3.0, 1.2)
 	b.shake(0.35)
@@ -230,6 +261,8 @@ static func light_pillar(b: Node, center: Vector3, radius: float, dmg: float) ->
 	tw.tween_interval(0.5)
 	tw.tween_property(mat, "albedo_color:a", 0.0, 0.6)
 	tw.tween_callback(beam.queue_free)
+	b.fx.rune_circle(center, radius, Color(1.0, 0.85, 0.4), 1.4)
+	b.fx.decal("crack", center, radius * 2.2, Color(1, 1, 1, 0.9), 6.0)
 	b.fx.explosion(center, radius, Color(1.0, 0.85, 0.4), true)
 	b.fx.shockwave(center, radius * 1.3, Color(1.0, 0.9, 0.5, 0.9), 0.6)
 	b.fx.flash_light(center + Vector3(0, 6, 0), Color(1.0, 0.9, 0.6), 12.0, radius * 4.0, 1.0)
@@ -270,6 +303,8 @@ static func grasping_roots(b: Node, center: Vector3, radius: float, dmg: float) 
 		tw.tween_interval(randf() * 0.4)
 		tw.tween_property(mi, "global_position:y", p.y + 1.2, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	b.fx.shockwave(center, radius, Color(0.4, 1.0, 0.3, 0.8), 0.7)
+	b.fx.rune_circle(center, radius, Color(0.4, 1.0, 0.35), 3.4)
+	b.fx.decal("crack", center, radius * 2.0, Color(0.6, 0.8, 0.4, 0.8), 5.0)
 	b.fx.flash_light(center + Vector3(0, 3, 0), Color(0.4, 1.0, 0.3), 5.0, radius * 3.0, 1.5)
 	for e in b.enemies.enemies_in_radius(center, radius):
 		b.enemies.damage(e, dmg, "nature", true, "ability")
@@ -369,6 +404,17 @@ static func elder_dragon(b: Node, z: float, dmg: float, radius: float) -> void:
 	dragon.look_at(end, Vector3.UP)
 	dragon.rotate_object_local(Vector3.UP, PI)
 	dragon.scale = Vector3.ONE * 1.3
+	var mouth := Node3D.new()
+	mouth.position = Vector3(0, 1.6, 6.2)
+	dragon.add_child(mouth)
+	var jet: GPUParticles3D = b.fx.fire_jet(mouth, Color(0.3, 1.0, 0.8), 1.3)
+	jet.emitting = false
+	b.get_tree().create_timer(0.7, false).timeout.connect(func():
+		if is_instance_valid(jet):
+			jet.emitting = true)
+	b.get_tree().create_timer(2.5, false).timeout.connect(func():
+		if is_instance_valid(jet):
+			jet.emitting = false)
 	var tw := dragon.create_tween()
 	tw.tween_property(dragon, "global_position", end, 3.2).set_trans(Tween.TRANS_LINEAR)
 	tw.tween_callback(dragon.queue_free)
@@ -386,6 +432,7 @@ static func elder_dragon(b: Node, z: float, dmg: float, radius: float) -> void:
 				return
 			b.projectiles.fire("dragonfire", head + Vector3(0, -1, 0), null, 40.0, 0.0, func(hit: Vector3, _t):
 				b.fx.explosion(hit, radius, Color(0.3, 1.0, 0.8))
+				b.fx.decal("scorch", hit, radius * 2.2, Color(0.6, 1.0, 0.9, 0.85), 6.0, 0.8)
 				for e in b.enemies.enemies_in_radius(hit, radius):
 					b.enemies.damage(e, dmg, "fire", true, "ability")
 					b.enemies.apply_burn(e, dmg * 0.3, 4.0), ground))
