@@ -142,6 +142,7 @@ static func juice(b: Control) -> void:
 	b.pivot_offset = b.size / 2.0
 	if b is BaseButton:
 		var bb := b as BaseButton
+		bb.pressed.connect(func(): Audio.sfx("ui_click", -6.0, 0.05, 0.02))
 		bb.button_down.connect(func():
 			b.create_tween().tween_property(b, "scale", Vector2(0.92, 0.92), 0.06))
 		bb.button_up.connect(func():

@@ -147,6 +147,7 @@ func _build() -> void:
 	waves.all_waves_cleared.connect(_on_victory)
 	loot.item_found.connect(func(item): hud.loot_toast(item))
 
+	Audio.play_music("battle")
 	if mode == "playground":
 		god_fill_pads()
 	elif mode == "sandbox":
@@ -430,6 +431,7 @@ func place_defense(type: String, p: Vector3) -> DefenseSystem.Defense:
 		return null
 	if not _pay(defenses.cost(type)):
 		return null
+	Audio.sfx("build", -3.0, 0.05, 0.0)
 	return defenses.place(type, p)
 
 
@@ -514,6 +516,7 @@ func build_tower(pad_index: int, type: String, level := 1, reselect := true) -> 
 	t.setup(type, level, self)
 	t.total_spent = cost
 	pad["tower"] = t
+	Audio.sfx("build", -3.0, 0.05, 0.0)
 	(pad["node"] as Node3D).visible = false
 	fx.shockwave(t.global_position, 2.5, Color(1, 0.85, 0.4, 0.8))
 	fx.hit_spark(t.global_position + Vector3(0, 2, 0), Color(1, 0.9, 0.5))
@@ -540,6 +543,7 @@ func upgrade_selected() -> void:
 		return
 	t.total_spent += 0 if free else cost
 	t.set_level(t.level + 1)
+	Audio.sfx("upgrade", -2.0, 0.0, 0.0)
 	select_pad(selected_pad)
 
 
@@ -561,6 +565,7 @@ func sell_selected() -> void:
 	pad["tower"] = null
 	(pad["node"] as Node3D).visible = true
 	fx.explosion(t.global_position + Vector3(0, 1, 0), 1.5, Color(0.8, 0.7, 0.5))
+	Audio.sfx("sell", -3.0, 0.0, 0.0)
 	t.queue_free()
 	deselect()
 
@@ -573,17 +578,21 @@ func call_next_wave() -> void:
 
 
 func _on_wave_started(w: int, is_boss: bool) -> void:
+	Audio.sfx("wave_start", -2.0, 0.0, 0.0)
 	hud.banner("WAVE %d" % w if not is_boss else "BOSS WAVE %d" % w, UITheme.GOLD if not is_boss else Color(1, 0.4, 0.3))
 
 
 func _on_wave_cleared(w: int) -> void:
 	if game_over:
 		return
+	Audio.sfx("wave_clear", -3.0, 0.0, 0.0)
 	var bonus := 25 + w * 5
 	if not GameState.has_unlimited_resources():
 		gold += bonus
 	run.gold_earned += bonus
 	hud.show_hint("Wave %d cleared!  +%d gold" % [w, bonus])
+	for h in heroes:
+		h.celebrate(1.8)
 	var every := 1 if mode == "playground" else GameData.BLESSING_EVERY
 	if w % every == 0 and not GameState.is_god("auto_complete_waves"):
 		offer_blessing()
@@ -596,6 +605,7 @@ func offer_blessing() -> void:
 
 func pick_blessing(id: String) -> void:
 	var new_combos := run.add_blessing(id)
+	Audio.sfx("combo" if not new_combos.is_empty() else "blessing", 0.0, 0.0, 0.0)
 	if id == "fortify":
 		_apply_castle_stats()
 		castle.repair_full()
@@ -626,6 +636,10 @@ func _on_enemy_killed(e: EnemyManager.Enemy) -> void:
 	if has_combo("divine_storm") and e.burn_t <= 0.0 and randf() < 0.3:
 		castle.heal(castle.max_hp * 0.002)
 	if e.boss:
+		if not enemies.enemies.any(func(o): return o.alive and o.boss and o != e):
+			get_tree().create_timer(3.0, false).timeout.connect(func():
+				if not game_over:
+					Audio.play_music("battle", 2.0))
 		shake(1.0)
 		run.gems_earned += 5
 		run.materials_earned += 3
@@ -637,6 +651,7 @@ func _on_enemy_killed(e: EnemyManager.Enemy) -> void:
 
 func _on_castle_hit(dmg: float, pos: Vector3) -> void:
 	castle.take_damage(dmg, pos)
+	Audio.sfx("castle_hit", -8.0)
 	if dmg >= 50.0:
 		shake(0.4)
 
@@ -672,7 +687,13 @@ func _on_victory() -> void:
 
 
 func _finish(victory: bool) -> void:
+	Audio.play_music("victory" if victory else "defeat", 0.5)
+	if victory:
+		for h in heroes:
+			h.celebrate()
 	var summary := apply_rewards(victory)
+	if summary.get("levels", {}).values().any(func(v): return int(v) > 0):
+		Audio.sfx("level_up", 0.0, 0.0, 0.0)
 	hud.show_result(victory, waves.wave if victory else maxi(waves.wave - 1, 0), summary)
 
 

@@ -57,6 +57,8 @@ class Enemy:
 	var anim_t := 0.0
 	var death_t := 0.0
 	var flash := 0.0
+	var hit_t := 0.0
+	var special_t := 0.0
 	var ally := false
 	var life := 0.0
 	var target: Enemy = null
@@ -238,6 +240,8 @@ func _process(delta: float) -> void:
 			any_dead = true
 			continue
 		e.flash = maxf(0.0, e.flash - delta * 5.0)
+		e.hit_t = maxf(0.0, e.hit_t - delta)
+		e.special_t = maxf(0.0, e.special_t - delta)
 		e.immune_t = maxf(0.0, e.immune_t - delta)
 		e.haste_t = maxf(0.0, e.haste_t - delta)
 		if e.burn_t > 0.0:
@@ -255,7 +259,7 @@ func _process(delta: float) -> void:
 				e.slow = 0.0
 		if e.frozen_t > 0.0:
 			e.frozen_t -= delta
-		var move_mult := 0.0 if e.frozen_t > 0.0 else (1.0 - e.slow) * (1.5 if e.haste_t > 0.0 else 1.0)
+		var move_mult := 0.0 if e.frozen_t > 0.0 or e.special_t > 0.0 else (1.0 - e.slow) * (1.5 if e.haste_t > 0.0 else 1.0)
 		var line := attack_line_z - e.radius
 		if e.ranged > 0.0:
 			line = attack_line_z - e.ranged
@@ -410,6 +414,14 @@ func _bucket(buckets: Dictionary, e: Enemy) -> void:
 		anim = "death"
 		var n: int = frames["death"].size()
 		frame = mini(int(e.death_t / DEATH_TIME * n), n - 1)
+	elif e.special_t > 0.0 and frames.has("special"):
+		anim = "special"
+		var ns: int = frames["special"].size()
+		frame = mini(int((1.0 - e.special_t / 1.6) * ns), ns - 1)
+	elif e.hit_t > 0.0 and frames.has("hit"):
+		anim = "hit"
+		var nh: int = frames["hit"].size()
+		frame = mini(int((1.0 - e.hit_t / 0.25) * nh), nh - 1)
 	elif e.attacking:
 		anim = "attack"
 		var n2: int = frames["attack"].size()
@@ -444,6 +456,9 @@ func _apply_damage(e: Enemy, amount: float, element: String, show_number: bool, 
 	e.hp -= amount
 	if show_number:
 		e.flash = 1.0
+		if amount > e.max_hp * 0.08 and not e.boss and e.hit_t <= 0.0:
+			e.hit_t = 0.25
+		Audio.sfx("enemy_hit", -14.0)
 		if _number_throttle <= 0.0 or e.boss:
 			fx.damage_number(e.pos + Vector3(0, e.scale, 0), amount, _element_color(element) if amount < 400 else Color(1, 0.5, 0.2))
 			_number_throttle = 0.03
@@ -452,6 +467,7 @@ func _apply_damage(e: Enemy, amount: float, element: String, show_number: bool, 
 
 
 func _kill(e: Enemy) -> void:
+	Audio.sfx("skeleton_death" if e.model.begins_with("skel") else "enemy_death", -9.0)
 	e.alive = false
 	e.attacking = false
 	e.death_t = 0.0
@@ -486,6 +502,8 @@ func damage_radius(center: Vector3, radius: float, amount: float, element := "ph
 		if d2 <= rr * rr:
 			var f := 1.0 - (sqrt(d2) / rr) * 0.5 if falloff else 1.0
 			_apply_damage(e, amount * f, element, hits < 6, source)
+			if e.alive and not e.boss and amount * f > e.max_hp * 0.3 and not e.attacking:
+				e.pos.z -= 1.2 / maxf(e.scale, 0.8)   # knockback away from the castle
 			hits += 1
 	return hits
 

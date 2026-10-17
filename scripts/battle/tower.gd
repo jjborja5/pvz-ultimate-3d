@@ -236,6 +236,7 @@ func _attack(target: EnemyManager.Enemy) -> void:
 	var el: String = ELEMENT[type]
 	match type:
 		"archer":
+			Audio.sfx("arrow_shoot", -8.0)
 			_archer_t = 0.0
 			var shots: int = int(stat("multishot")) + int(_mod("archer_extra"))
 			var used: Array = [target]
@@ -249,6 +250,7 @@ func _attack(target: EnemyManager.Enemy) -> void:
 		"cannon":
 			var splash: float = stat("splash") * (1.0 + _mod("cannon_splash"))
 			fx.hit_spark(muzzle() + Vector3(0, 0.2, 0), Color(1, 0.8, 0.4))
+			Audio.sfx("cannon_fire", -5.0)
 			projectiles.fire("shell", muzzle(), target, 26.0, 3.0, func(p: Vector3, _t):
 				fx.explosion(p, splash, Color(1.0, 0.55, 0.2), level >= 4)
 				enemies.damage_radius(p, splash, dmg, el, true, "tower")
@@ -270,6 +272,7 @@ func _attack(target: EnemyManager.Enemy) -> void:
 				enemies.damage(e, dmg * f, el, true, "tower")
 				f *= 0.85
 		"fire":
+			Audio.sfx("fire_whoosh", -10.0)
 			var splash: float = stat("splash")
 			var burn: float = stat("burn") * (1.0 + _mod("burn"))
 			projectiles.fire("fire", muzzle(), target, 18.0, 2.0, func(p: Vector3, _t):
@@ -279,6 +282,7 @@ func _attack(target: EnemyManager.Enemy) -> void:
 					enemies.apply_burn(e, burn, 3.0))
 		"ice":
 			var splash: float = stat("splash")
+			Audio.sfx("ice_cast", -12.0)
 			var slow: float = stat("slow") + _mod("slow")
 			var freeze_chance := (0.15 if level >= 5 else 0.0) + _mod("freeze")
 			projectiles.fire("ice", muzzle(), target, 22.0, 1.0, func(p: Vector3, _t):
@@ -292,6 +296,7 @@ func _attack(target: EnemyManager.Enemy) -> void:
 
 func _shoot_arrow(target: EnemyManager.Enemy, dmg: float) -> void:
 	projectiles.fire("arrow", muzzle(), target, 38.0, 1.2, func(p: Vector3, t):
+		Audio.sfx("arrow_hit", -10.0)
 		if t != null and t.alive:
 			enemies.damage(t, dmg, "physical", true, "tower")
 		else:

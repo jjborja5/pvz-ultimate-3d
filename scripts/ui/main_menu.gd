@@ -36,6 +36,7 @@ func _ready() -> void:
 	camera.make_current()
 	fx.camera = camera
 	_build_ui()
+	Audio.play_music("menu")
 	GameState.god_changed.connect(func(_k): _refresh_currencies())
 
 
@@ -376,7 +377,7 @@ func _show_settings() -> void:
 	dn.button_pressed = GameState.settings["show_damage_numbers"]
 	dn.toggled.connect(func(on): GameState.set_setting("show_damage_numbers", on))
 	body.add_child(dn)
-	for pair in [["particles_quality", "Particle Quality", 0.25, 1.0], ["sfx_volume", "Sound Effects (Phase 4)", 0.0, 1.0], ["music_volume", "Music (Phase 4)", 0.0, 1.0]]:
+	for pair in [["particles_quality", "Particle Quality", 0.25, 1.0], ["sfx_volume", "Sound Effects Volume", 0.0, 1.0], ["music_volume", "Music Volume", 0.0, 1.0]]:
 		var l := UITheme.label(pair[1], 24)
 		body.add_child(l)
 		var s := HSlider.new()

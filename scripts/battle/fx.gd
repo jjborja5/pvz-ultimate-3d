@@ -139,6 +139,7 @@ func shockwave(pos: Vector3, radius: float, color: Color, duration := 0.45) -> v
 
 
 func explosion(pos: Vector3, radius: float, color := Color(1.0, 0.55, 0.15), big := false) -> void:
+	Audio.sfx("explosion_big" if big and radius >= 4.0 else "explosion", -4.0 if not big else 0.0)
 	var n := 40 if big else 22
 	_burst(pos + Vector3(0, 0.5, 0), n, 0.7 if not big else 1.1, 6.0 + radius * 1.5, 1.4 + radius * 0.35,
 		PackedColorArray([Color(1, 1, 0.8, 1), color, Color(color.r * 0.5, color.g * 0.2, 0.05, 0.6), Color(0.1, 0.1, 0.1, 0)]),
@@ -158,6 +159,7 @@ func explosion(pos: Vector3, radius: float, color := Color(1.0, 0.55, 0.15), big
 
 
 func frost_burst(pos: Vector3, radius: float) -> void:
+	Audio.sfx("ice_shatter", -6.0)
 	_burst(pos + Vector3(0, 0.4, 0), 24, 0.8, 4.0 + radius, 0.9,
 		PackedColorArray([Color(1, 1, 1, 1), Color(0.6, 0.9, 1.0, 0.9), Color(0.3, 0.6, 1.0, 0)]),
 		Color(1.4, 1.8, 2.2), Vector3(0, -3, 0))
@@ -180,6 +182,7 @@ func soul_puff(pos: Vector3, color: Color) -> void:
 func lightning(points: Array, color := Color(0.6, 0.8, 1.0), width := 0.35, duration := 0.28) -> void:
 	if points.size() < 2:
 		return
+	Audio.sfx("lightning" if width >= 0.55 else "chain_zap", -3.0 if width >= 0.55 else -6.0)
 	var cam_pos := camera.global_position if camera else Vector3(0, 30, 30)
 	var im := ImmediateMesh.new()
 	var mi := MeshInstance3D.new()

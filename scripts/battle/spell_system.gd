@@ -53,6 +53,10 @@ func force_cast(id: String, point: Vector3) -> void:
 	## Cast without cooldown checks (used by combos and auto-blessings).
 	var def: Dictionary = (GameData.SPELLS[id] as Dictionary).duplicate()
 	def["damage"] = float(def["damage"]) * power()
+	var cast_snd := {"fireball": "fire_cast", "ice_storm": "ice_cast", "meteor": "meteor_fall", "meteor_shower": "meteor_fall",
+		"firestorm": "fire_roar", "frost_nova": "ice_cast", "divine_wrath": "holy_cast"}
+	if cast_snd.has(id):
+		Audio.sfx(cast_snd[id], 0.0, 0.04, 0.0)
 	match id:
 		"fireball": _fireball(point, def)
 		"lightning": _chain_storm(point, def)

@@ -8,31 +8,31 @@ extends RefCounted
 
 const CHAR_DIR := "res://assets/kaykit/characters/"
 const CACHE_DIR := "user://bake_cache/"
-const BAKE_VERSION := 4
+const BAKE_VERSION := 5
 
 ## Model configs: source character, visible accessory meshes, extra weapons, animations.
 ## anims: name -> [clip, frame_count, loop]
 const CONFIGS := {
 	"rogue": {"src": "Rogue", "keep": ["Knife", "Knife_Offhand"],
-		"anims": {"walk": ["Running_A", 8, true], "attack": ["Dualwield_Melee_Attack_Stab", 6, true], "death": ["Death_A", 6, false]}},
+		"anims": {"walk": ["Running_A", 8, true], "attack": ["Dualwield_Melee_Attack_Stab", 6, true], "death": ["Death_A", 6, false], "hit": ["Hit_A", 3, false], "special": ["Cheer", 6, false]}},
 	"barbarian": {"src": "Barbarian", "keep": ["1H_Axe", "Barbarian_Round_Shield", "Barbarian_Hat"],
-		"anims": {"walk": ["Walking_A", 8, true], "attack": ["1H_Melee_Attack_Chop", 6, true], "death": ["Death_A", 6, false]}},
+		"anims": {"walk": ["Walking_A", 8, true], "attack": ["1H_Melee_Attack_Chop", 6, true], "death": ["Death_A", 6, false], "hit": ["Hit_A", 3, false], "special": ["Cheer", 6, false]}},
 	"barbarian_2h": {"src": "Barbarian", "keep": ["2H_Axe", "Barbarian_Hat", "Barbarian_Cape"],
-		"anims": {"walk": ["Walking_A", 8, true], "attack": ["2H_Melee_Attack_Chop", 6, true], "death": ["Death_B", 6, false]}},
+		"anims": {"walk": ["Walking_A", 8, true], "attack": ["2H_Melee_Attack_Chop", 6, true], "death": ["Death_B", 6, false], "hit": ["Hit_A", 3, false], "special": ["2H_Melee_Attack_Spin", 6, false]}},
 	"knight": {"src": "Knight", "keep": ["1H_Sword", "Spike_Shield", "Knight_Helmet", "Knight_Cape"],
-		"anims": {"walk": ["Walking_A", 8, true], "attack": ["1H_Melee_Attack_Slice_Diagonal", 6, true], "death": ["Death_A", 6, false]}},
+		"anims": {"walk": ["Walking_A", 8, true], "attack": ["1H_Melee_Attack_Slice_Diagonal", 6, true], "death": ["Death_A", 6, false], "hit": ["Hit_A", 3, false], "special": ["Cheer", 6, false]}},
 	"knight_2h": {"src": "Knight", "keep": ["2H_Sword", "Knight_Helmet", "Knight_Cape"],
-		"anims": {"walk": ["Walking_A", 8, true], "attack": ["2H_Melee_Attack_Slice", 6, true], "death": ["Death_B", 6, false]}},
+		"anims": {"walk": ["Walking_A", 8, true], "attack": ["2H_Melee_Attack_Slice", 6, true], "death": ["Death_B", 6, false], "hit": ["Hit_A", 3, false], "special": ["2H_Melee_Attack_Spin", 6, false]}},
 	"archer_xbow": {"src": "Rogue_Hooded", "keep": ["2H_Crossbow", "Rogue_Cape"],
-		"anims": {"walk": ["2H_Ranged_Aiming", 4, true], "attack": ["2H_Ranged_Shoot", 6, true], "death": ["Death_A", 2, false]}},
+		"anims": {"walk": ["2H_Ranged_Aiming", 4, true], "attack": ["2H_Ranged_Shoot", 6, true], "death": ["Death_A", 2, false], "hit": ["Hit_A", 3, false], "special": ["Cheer", 6, false]}},
 	"skel_minion": {"src": "Skeleton_Minion", "keep": ["*"], "weapons": {"handslot.r": "Skeleton_Blade"},
-		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["1H_Melee_Attack_Chop", 6, true], "death": ["Death_C_Skeletons", 6, false]}},
+		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["1H_Melee_Attack_Chop", 6, true], "death": ["Death_C_Skeletons", 6, false], "hit": ["Hit_A", 3, false], "special": ["Taunt", 6, false]}},
 	"skel_warrior": {"src": "Skeleton_Warrior", "keep": ["*"], "weapons": {"handslot.r": "Skeleton_Axe", "handslot.l": "Skeleton_Shield_Large_A"},
-		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["1H_Melee_Attack_Slice_Horizontal", 6, true], "death": ["Death_C_Skeletons", 6, false]}},
+		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["1H_Melee_Attack_Slice_Horizontal", 6, true], "death": ["Death_C_Skeletons", 6, false], "hit": ["Hit_A", 3, false], "special": ["Taunt", 6, false]}},
 	"skel_rogue": {"src": "Skeleton_Rogue", "keep": ["*"], "weapons": {"handslot.r": "Skeleton_Crossbow"},
-		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["1H_Ranged_Shoot", 6, true], "death": ["Death_C_Skeletons", 6, false]}},
+		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["1H_Ranged_Shoot", 6, true], "death": ["Death_C_Skeletons", 6, false], "hit": ["Hit_A", 3, false], "special": ["Taunt", 6, false]}},
 	"skel_mage": {"src": "Skeleton_Mage", "keep": ["*"], "weapons": {"handslot.r": "Skeleton_Staff"},
-		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["Spellcast_Shoot", 6, true], "death": ["Death_C_Skeletons", 6, false]}},
+		"anims": {"walk": ["Walking_D_Skeletons", 8, true], "attack": ["Spellcast_Shoot", 6, true], "death": ["Death_C_Skeletons", 6, false], "hit": ["Hit_A", 3, false], "special": ["Spellcast_Summon", 6, false]}},
 }
 
 static var _mem := {}   # config -> {anim -> Array[ArrayMesh]}

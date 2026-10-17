@@ -11,6 +11,11 @@ static var _beam_mat: StandardMaterial3D
 
 static func cast(hero: Hero, ability_id: String) -> void:
 	var b: Node = hero.battle
+	var snd := {"arrow_storm": "arrow_shoot", "firestorm": "fire_roar", "glacial_spikes": "ice_cast", "thunder_dome": "lightning",
+		"divine_judgment": "holy_cast", "wrath_of_grove": "nature_cast", "army_of_dead": "summon", "mortar_barrage": "cannon_fire",
+		"elder_dragon": "dragon_roar"}
+	Audio.sfx(snd.get(ability_id, "magic_cast"), 2.0, 0.03, 0.0)
+	Audio.sfx("magic_cast", -6.0, 0.05, 0.0)
 	var dmg := hero.ability_damage()
 	var a: Dictionary = hero.def["ability"]
 	var center: Vector3 = b.enemies.densest_point()

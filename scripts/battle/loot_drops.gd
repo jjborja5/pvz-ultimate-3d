@@ -35,6 +35,7 @@ func on_kill(e: EnemyManager.Enemy) -> void:
 
 func _coin(from: Vector3) -> void:
 	_coins += 1
+	Audio.sfx("coin", -10.0, 0.1)
 	var c := Assets.place(self, "dungeon/coin.glb", from, 2.2, randf() * TAU)
 	c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var target := Vector3(randf_range(-4, 4), 5.0, -1.0)
@@ -76,6 +77,7 @@ func _chest(at: Vector3, item: Dictionary, big: bool) -> void:
 	tw.parallel().tween_property(bm, "albedo_color:a", 0.5, 0.4)
 	tw.tween_interval(0.6)
 	tw.tween_callback(func():
+		Audio.sfx("loot_legendary" if int(item["rarity"]) >= 3 else "chest_open", 0.0, 0.02, 0.0)
 		fx.explosion(p + Vector3(0, 1, 0), 2.5, col)
 		fx.flash_light(p + Vector3(0, 2, 0), col, 5.0, 10.0, 0.8)
 		var item_saved := GameState.add_item(item)

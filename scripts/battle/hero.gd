@@ -123,6 +123,12 @@ func can_cast() -> bool:
 	return GameState.is_god("no_cooldowns") or ability_cd <= 0.0
 
 
+func celebrate(duration := 2.5) -> void:
+	## Victory / wave-clear celebration.
+	_play("Cheer", true)
+	_busy = duration
+
+
 func cast_ability() -> bool:
 	if not can_cast():
 		return false
@@ -213,6 +219,8 @@ func _attack(target: EnemyManager.Enemy) -> void:
 		if t2 == null:
 			break
 		targets.append(t2)
+	var snd := {"arrow": "arrow_shoot", "holy": "sword_slash", "bomb": "fire_whoosh", "chain": "chain_zap"}
+	Audio.sfx(snd.get(kind, "magic_cast"), -9.0)
 	match kind:
 		"chain":
 			var chain: Array = [target]
