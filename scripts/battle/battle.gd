@@ -124,6 +124,7 @@ func _build() -> void:
 	_focus_marker.visible = false
 	add_child(_focus_marker)
 
+	GameState.apply_viewport_quality(get_viewport())
 	_deploy_heroes()
 	_apply_castle_stats()
 	gold = START_GOLD + int(GameState.upgrade_value("start_gold"))
@@ -237,7 +238,8 @@ func _process(delta: float) -> void:
 	# slow motion during boss intros
 	var speed := GameState.god_value("game_speed", 1.0)
 	Engine.time_scale = clampf(speed * (0.35 if bosses.is_cinematic() else 1.0), 0.05, 8.0)
-	enemies.lod_z = _cam_look_z - 20.0
+	enemies.lod_z = _cam_look_z + float(GameState.quality_profile()["lod_offset"])
+	enemies.max_hi_units = [50, 90, 140][clampi(int(GameState.settings.get("quality", 2)), 0, 2)]
 	_run_auto_blessings(delta)
 
 

@@ -36,7 +36,9 @@ func build(p_map: String) -> void:
 	_build_vegetation()
 	_build_rocks_and_ruins()
 	_build_ambient_particles()
-	_build_weather()
+	if GameState.quality_profile()["weather"]:
+		_build_weather()
+	StaticBatcher.batch(self)
 
 
 func has_channel() -> bool:
@@ -124,7 +126,7 @@ func _build_environment() -> void:
 	sun.shadow_bias = 0.03
 	sun.shadow_normal_bias = 1.2
 	sun.shadow_blur = 1.4
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if int(GameState.settings.get("quality", 2)) >= 2 else DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.directional_shadow_max_distance = float(GameState.settings.get("shadow_distance", 80.0))
 	sun.directional_shadow_fade_start = 0.8
 	add_child(sun)
@@ -371,6 +373,7 @@ func _build_clouds() -> void:
 			Vector3(side * _rng.randf_range(24.0, 60.0), _rng.randf_range(16.0, 28.0), _rng.randf_range(-140.0, -20.0)),
 			_rng.randf_range(4.0, 7.0), _rng.randf() * TAU, mat)
 		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		c.remove_meta("static_ok")
 		var tw := c.create_tween().set_loops()
 		var drift := _rng.randf_range(4.0, 9.0)
 		tw.tween_property(c, "position:x", c.position.x + drift, _rng.randf_range(14.0, 24.0)).set_trans(Tween.TRANS_SINE)

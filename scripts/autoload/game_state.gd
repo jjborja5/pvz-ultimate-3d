@@ -42,7 +42,37 @@ var settings := {
 	"show_damage_numbers": true,
 	"sfx_volume": 0.8,
 	"music_volume": 0.6,
+	"quality": 2,              # 0 Low, 1 Medium, 2 High
+	"shadow_distance": 80.0,
+	"show_fps": false,
 }
+
+const QUALITY_PRESETS := [
+	{"name": "Low", "scale": 0.7, "msaa": 0, "shadows": false, "particles": 0.35, "shadow_distance": 50.0, "unit_shadows": false, "lod_offset": -10.0, "weather": false},
+	{"name": "Medium", "scale": 0.85, "msaa": 0, "shadows": true, "particles": 0.7, "shadow_distance": 60.0, "unit_shadows": false, "lod_offset": -16.0, "weather": true},
+	{"name": "High", "scale": 1.0, "msaa": 2, "shadows": true, "particles": 1.0, "shadow_distance": 80.0, "unit_shadows": true, "lod_offset": -20.0, "weather": true},
+]
+
+
+func quality_profile() -> Dictionary:
+	return QUALITY_PRESETS[clampi(int(settings.get("quality", 2)), 0, QUALITY_PRESETS.size() - 1)]
+
+
+func set_quality(level: int) -> void:
+	## Applies a preset to the individual graphics settings.
+	settings["quality"] = clampi(level, 0, QUALITY_PRESETS.size() - 1)
+	var q := quality_profile()
+	settings["shadows"] = q["shadows"]
+	settings["particles_quality"] = q["particles"]
+	settings["shadow_distance"] = q["shadow_distance"]
+	settings_changed.emit()
+	save_state()
+
+
+func apply_viewport_quality(vp: Viewport) -> void:
+	var q := quality_profile()
+	vp.scaling_3d_scale = q["scale"]
+	vp.msaa_3d = Viewport.MSAA_2X if int(q["msaa"]) == 2 else Viewport.MSAA_DISABLED
 
 ## Hero progression: id -> {level, xp, ability_level, skin, equipped: {slot: item uid or -1}}
 var heroes := {}
@@ -65,6 +95,8 @@ func _ready() -> void:
 	_ensure_heroes()
 	if inventory.is_empty():
 		_starter_items()
+	if OS.has_feature("mobile") and not FileAccess.file_exists(SAVE_PATH):
+		set_quality(1)   # phones start on Medium; players can raise it in Settings
 	apply_game_speed()
 
 

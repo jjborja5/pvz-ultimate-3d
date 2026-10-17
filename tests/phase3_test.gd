@@ -171,6 +171,8 @@ func _process(delta: float) -> void:
 				battle.god_kill_all()
 				# rewards with real levelling
 				GameState.god["max_power"] = false
+				GameState.heroes[battle.heroes[0].id]["level"] = 1   # tests share user data: start from level 1
+				GameState.heroes[battle.heroes[0].id]["xp"] = 0
 				var lvl_before := int(GameState.heroes[battle.heroes[0].id]["level"])
 				battle.kills += 500
 				var summary: Dictionary = battle.apply_rewards(true)

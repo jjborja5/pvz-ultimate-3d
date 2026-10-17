@@ -75,10 +75,14 @@ var damage_modifier: Callable     # (e, amount, element, source) -> float, set b
 var kill_hooks: Array[Callable] = []
 
 var _dying: Array[Enemy] = []
+const CELL := 4.0
+var _grid := {}                  # cell key -> Array[Enemy] (rebuilt every frame)
+var stats := {"sim_us": 0, "render_us": 0, "buckets": 0}
 var _mmi := {}                   # "type|anim|frame|lod" -> MultiMeshInstance3D
 var _mats := {}
 var _frames := {}                # model -> baked frames dictionary
 var _hp_mm: MultiMesh
+var _shadow_mm: MultiMesh
 var _rng := RandomNumberGenerator.new()
 var _number_throttle := 0.0
 var _shader: Shader
@@ -110,6 +114,26 @@ func setup(p_world: WorldBuilder, p_fx: FX) -> void:
 	hpi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	hpi.custom_aabb = AABB(Vector3(-80, -10, -160), Vector3(160, 60, 220))
 	add_child(hpi)
+	# blob shadows: one instanced draw for the whole horde instead of per-unit shadow passes
+	_shadow_mm = MultiMesh.new()
+	_shadow_mm.transform_format = MultiMesh.TRANSFORM_3D
+	var sq := QuadMesh.new()
+	sq.size = Vector2(1, 1)
+	sq.orientation = PlaneMesh.FACE_Y
+	_shadow_mm.mesh = sq
+	_shadow_mm.instance_count = 0
+	var smi := MultiMeshInstance3D.new()
+	smi.multimesh = _shadow_mm
+	var sm := StandardMaterial3D.new()
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm.albedo_texture = FXTextures.get_tex("soft")
+	sm.albedo_color = Color(0.05, 0.03, 0.08, 0.55)
+	sm.disable_receive_shadows = true
+	smi.material_override = sm
+	smi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	smi.custom_aabb = AABB(Vector3(-80, -10, -160), Vector3(160, 60, 220))
+	add_child(smi)
 
 
 func _material(type: String) -> ShaderMaterial:
@@ -145,7 +169,7 @@ func _mmi_for(type: String, model: String, anim: String, frame: int, lo: bool) -
 	mmi.multimesh = mm
 	mmi.material_override = _material(type)
 	mmi.custom_aabb = AABB(Vector3(-80, -10, -160), Vector3(160, 60, 220))
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if lo else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # units use blob shadows (see _render)
 	add_child(mmi)
 	_mmi[key] = mmi
 	return mmi
@@ -190,6 +214,11 @@ func spawn(type: String, lane := -1, z := WorldBuilder.SPAWN_Z, hp_scale := 1.0,
 	var x := WorldBuilder.lane_x(e.lane, z) + e.offset
 	e.pos = Vector3(x, world.height_at(x, z), z - _rng.randf_range(0.0, 3.0))
 	enemies.append(e)
+	var gk := _key(int(floor(e.pos.x / CELL)), int(floor(e.pos.z / CELL)))
+	if _grid.has(gk):
+		_grid[gk].append(e)
+	else:
+		_grid[gk] = [e]
 	if e.boss:
 		boss_spawned.emit(e)
 	return e
@@ -232,6 +261,7 @@ func alive_count() -> int:
 # ------------------------------------------------------------------ simulation
 
 func _process(delta: float) -> void:
+	var t_start := Time.get_ticks_usec()
 	_number_throttle = maxf(0.0, _number_throttle - delta)
 	var field := WorldBuilder.FIELD_HALF - 1.0
 	var any_dead := false
@@ -301,7 +331,45 @@ func _process(delta: float) -> void:
 	for c in _dying:
 		c.death_t += delta
 	_dying = _dying.filter(func(x): return x.death_t < CORPSE_TIME)
+	_rebuild_grid()
+	var t_mid := Time.get_ticks_usec()
 	_render()
+	stats["sim_us"] = t_mid - t_start
+	stats["render_us"] = Time.get_ticks_usec() - t_mid
+
+
+func _key(cx: int, cz: int) -> int:
+	return (cx + 512) * 4096 + (cz + 512)
+
+
+func _rebuild_grid() -> void:
+	_grid.clear()
+	for e in enemies:
+		if not e.alive:
+			continue
+		var k := _key(int(floor(e.pos.x / CELL)), int(floor(e.pos.z / CELL)))
+		if _grid.has(k):
+			_grid[k].append(e)
+		else:
+			_grid[k] = [e]
+
+
+func _nearby(center: Vector3, radius: float) -> Array:
+	## Candidate enemies from grid cells overlapping the query circle.
+	var out: Array = []
+	var r := radius + 2.0   # largest unit radius slack
+	var x0 := int(floor((center.x - r) / CELL))
+	var x1 := int(floor((center.x + r) / CELL))
+	var z0 := int(floor((center.z - r) / CELL))
+	var z1 := int(floor((center.z + r) / CELL))
+	if _grid.is_empty() or (x1 - x0 + 1) * (z1 - z0 + 1) > _grid.size():
+		return enemies   # huge query: a linear scan is cheaper
+	for cx in range(x0, x1 + 1):
+		for cz in range(z0, z1 + 1):
+			var k := _key(cx, cz)
+			if _grid.has(k):
+				out.append_array(_grid[k])
+	return out
 
 
 func _blocker_ahead(e: Enemy, nz: float, nx: float) -> Object:
@@ -350,7 +418,26 @@ func _update_allies(delta: float) -> void:
 		allies = allies.filter(func(x): return x.alive)
 
 
+var max_hi_units := 140
+
+
+func _update_lod_cut() -> void:
+	## Only the max_hi_units enemies nearest the castle use full-detail meshes.
+	_hi_cut = lod_z
+	if enemies.size() > max_hi_units:
+		var zs := PackedFloat32Array()
+		zs.resize(enemies.size())
+		for i in enemies.size():
+			zs[i] = enemies[i].pos.z
+		zs.sort()
+		_hi_cut = maxf(lod_z, zs[zs.size() - max_hi_units])
+
+
+var _hi_cut := -44.0
+
+
 func _render() -> void:
+	_update_lod_cut()
 	# bucket units by (type, anim, frame, lod)
 	var buckets := {}
 	for e in enemies:
@@ -404,6 +491,26 @@ func _render() -> void:
 		hp_buf.resize(HPBAR_CAPACITY * FLOATS_PER_INSTANCE)
 		_hp_mm.buffer = hp_buf
 	_hp_mm.visible_instance_count = hp_n
+	_render_blob_shadows()
+
+
+func _render_blob_shadows() -> void:
+	var n := enemies.size() + allies.size()
+	if _shadow_mm.instance_count < n:
+		_shadow_mm.instance_count = int(ceil(n * 1.5 / 32.0)) * 32
+	var buf := PackedFloat32Array()
+	buf.resize(_shadow_mm.instance_count * 12)
+	var o := 0
+	for list in [enemies, allies]:
+		for e: Enemy in list:
+			var s := e.radius * 2.6 + e.scale * 0.4
+			buf[o] = s; buf[o + 1] = 0.0; buf[o + 2] = 0.0; buf[o + 3] = e.pos.x + 0.25
+			buf[o + 4] = 0.0; buf[o + 5] = 1.0; buf[o + 6] = 0.0; buf[o + 7] = e.pos.y + 0.06
+			buf[o + 8] = 0.0; buf[o + 9] = 0.0; buf[o + 10] = s * 0.85; buf[o + 11] = e.pos.z + 0.2
+			o += 12
+	if _shadow_mm.instance_count > 0:
+		_shadow_mm.buffer = buf
+	_shadow_mm.visible_instance_count = n
 
 
 func _bucket(buckets: Dictionary, e: Enemy) -> void:
@@ -429,7 +536,9 @@ func _bucket(buckets: Dictionary, e: Enemy) -> void:
 	else:
 		var n3: int = frames["walk"].size()
 		frame = int(e.anim_t * n3 * 1.25) % n3
-	var lo := e.pos.z < lod_z and not e.boss
+	var lo := e.pos.z < _hi_cut and not e.boss
+	if lo and anim == "walk":
+		frame = frame - frame % 2   # distant units share every other pose: half the buckets
 	var key := "%s|%s|%d|%d" % [e.type, anim, frame, 1 if lo else 0]
 	if not buckets.has(key):
 		buckets[key] = []
@@ -494,7 +603,7 @@ func _element_color(el: String) -> Color:
 
 func damage_radius(center: Vector3, radius: float, amount: float, element := "physical", falloff := true, source := "") -> int:
 	var hits := 0
-	for e: Enemy in enemies.duplicate():
+	for e: Enemy in _nearby(center, radius).duplicate():
 		if not e.alive:
 			continue
 		var d2 := Vector2(e.pos.x - center.x, e.pos.z - center.z).length_squared()
@@ -510,7 +619,7 @@ func damage_radius(center: Vector3, radius: float, amount: float, element := "ph
 
 func enemies_in_radius(center: Vector3, radius: float) -> Array[Enemy]:
 	var out: Array[Enemy] = []
-	for e in enemies:
+	for e: Enemy in _nearby(center, radius):
 		var rr := radius + e.radius
 		if e.alive and Vector2(e.pos.x - center.x, e.pos.z - center.z).length_squared() <= rr * rr:
 			out.append(e)
@@ -537,7 +646,7 @@ func find_target(from: Vector3, rng: float, exclude: Array = []) -> Enemy:
 	var best: Enemy = null
 	var best_z := -INF
 	var r2 := rng * rng
-	for e in enemies:
+	for e: Enemy in _nearby(from, rng):
 		if not e.alive or exclude.has(e):
 			continue
 		if Vector2(e.pos.x - from.x, e.pos.z - from.z).length_squared() <= r2:
@@ -551,7 +660,7 @@ func find_target(from: Vector3, rng: float, exclude: Array = []) -> Enemy:
 func find_nearest(from: Vector3, rng: float, exclude: Array = []) -> Enemy:
 	var best: Enemy = null
 	var best_d := rng * rng
-	for e in enemies:
+	for e: Enemy in _nearby(from, rng):
 		if not e.alive or exclude.has(e):
 			continue
 		var d := Vector2(e.pos.x - from.x, e.pos.z - from.z).length_squared()

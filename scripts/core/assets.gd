@@ -105,6 +105,7 @@ static func place(parent: Node3D, path: String, pos: Vector3, scl: Variant = 1.0
 	mi.mesh = mesh(path)
 	if mat:
 		mi.material_override = mat
+	mi.set_meta("static_ok", true)   # eligible for StaticBatcher merging
 	parent.add_child(mi)
 	mi.position = pos
 	mi.rotation.y = rot_y

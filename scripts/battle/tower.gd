@@ -139,6 +139,7 @@ func _rebuild() -> void:
 		_aura.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_aura.position.y = 0.15
 		add_child(_aura)
+	_batch_static.call_deferred()
 	_head = Node3D.new()
 	_head.position = Vector3(0, top, 0)
 	add_child(_head)
@@ -181,6 +182,10 @@ func _rebuild() -> void:
 	_range_ring.position = Vector3(0, 0.3 - position.y, 0)
 	_range_ring.visible = false
 	add_child(_range_ring)
+
+
+func _batch_static() -> void:
+	StaticBatcher.batch(self)
 
 
 func show_range(on: bool) -> void:

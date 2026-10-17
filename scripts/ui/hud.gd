@@ -160,6 +160,7 @@ var _boss_title: Label
 var _boss_sub: Label
 var _toasts: VBoxContainer
 var _row1: HBoxContainer
+var _fps: Label
 
 
 func _build_spell_bar() -> void:
@@ -375,6 +376,18 @@ func _process(_delta: float) -> void:
 		_boss_bar.value = boss.hp / boss.max_hp
 		_boss_name.text = GameData.ENEMIES[boss.type]["name"] + ("  [SHIELDED]" if boss.immune_t > 0.0 else "")
 	_god_btn.modulate = Color(1, 1, 1) if GameState.god["enabled"] else Color(0.5, 0.5, 0.5)
+	if GameState.settings.get("show_fps", false):
+		if _fps == null:
+			_fps = UITheme.label("", 16, Color(0.7, 1, 0.7))
+			_fps.position = Vector2(14, 214)
+			add_child(_fps)
+		_fps.text = "%d FPS  •  %d draws  •  %dk tris  •  sim %.1f ms" % [Engine.get_frames_per_second(),
+			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000,
+			battle.enemies.stats["sim_us"] / 1000.0]
+	elif _fps:
+		_fps.queue_free()
+		_fps = null
 
 
 func _cycle_speed() -> void:

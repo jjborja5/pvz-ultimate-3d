@@ -56,6 +56,7 @@ func build(p_fx: FX) -> void:
 	for side in [-1, 1]:
 		_torch(Vector3(side * 1.9, 2.4, -1.7))
 		_torch(Vector3(side * 10.5, 2.4, -1.6))
+	StaticBatcher.batch(self)
 	_build_barrier()
 	_build_pads()
 

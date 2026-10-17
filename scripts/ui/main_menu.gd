@@ -366,6 +366,24 @@ func _show_towers() -> void:
 
 func _show_settings() -> void:
 	var body := _screen_frame("Settings")
+	var qopt := OptionButton.new()
+	qopt.custom_minimum_size = Vector2(0, 72)
+	for i in GameState.QUALITY_PRESETS.size():
+		qopt.add_item("Graphics Quality: " + String(GameState.QUALITY_PRESETS[i]["name"]), i)
+	qopt.selected = int(GameState.settings.get("quality", 2))
+	qopt.item_selected.connect(func(i):
+		GameState.set_quality(i)
+		_show_settings())
+	body.add_child(qopt)
+	var qd := UITheme.label("Low: 70% render scale, no shadows, light particles  •  Medium: 85%, shadows  •  High: full resolution, MSAA, unit shadows", 17, Color(0.8, 0.8, 0.8))
+	qd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(qd)
+	var fpsb := CheckButton.new()
+	fpsb.text = "Show FPS / Performance Overlay"
+	fpsb.custom_minimum_size = Vector2(0, 72)
+	fpsb.button_pressed = GameState.settings.get("show_fps", false)
+	fpsb.toggled.connect(func(on): GameState.set_setting("show_fps", on))
+	body.add_child(fpsb)
 	var sh := CheckButton.new()
 	sh.text = "Dynamic Shadows"
 	sh.custom_minimum_size = Vector2(0, 72)

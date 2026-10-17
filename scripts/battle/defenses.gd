@@ -156,6 +156,7 @@ func _configure(d: Defense) -> void:
 			var spikes := Assets.place(d.model, "dungeon/floor_tile_big_spikes.glb", Vector3(0, -1.9, 0), Vector3(0.95 + lv * 0.08, 1.0, 0.95 + lv * 0.08), PI * 0.25,
 				Assets.tinted("dungeon/floor_tile_big_spikes.glb", Color(1.0, 0.4, 0.3), 0.5) if lv >= 3 else null)
 			spikes.name = "Spikes"
+			spikes.remove_meta("static_ok")
 		"barrel_trap":
 			var path := "dungeon/barrel_large.glb" if lv == 1 else "dungeon/barrel_large_decorated.glb"
 			var b := Assets.place(d.model, path, Vector3.ZERO, 0.75 + lv * 0.08, randf() * TAU,
@@ -217,6 +218,7 @@ func _configure(d: Defense) -> void:
 			if lv >= 3:
 				for side in [-1, 1]:
 					Assets.place(d.model, "hexagon/flag_blue.gltf", Vector3(side * 2.4, 2.2 + lv * 0.4, 0), 5.0, PI * 0.5)
+	StaticBatcher.batch(d.model)
 	if GameData.DEFENSES[d.type]["kind"] == "blocker":
 		var new_max := max_hp_for(d.type, lv)
 		d.hp = new_max if d.hp <= 1.0 or d.max_hp <= 1.0 else d.hp + (new_max - d.max_hp)
