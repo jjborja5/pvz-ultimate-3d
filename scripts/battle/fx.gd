@@ -151,7 +151,8 @@ func _burst(pos: Vector3, amount: int, lifetime: float, speed: float, size: floa
 
 
 func flash_light(pos: Vector3, color: Color, energy: float, rng: float, duration: float) -> void:
-	if _light_count >= MAX_LIGHTS:
+	# Low preset: only 2 concurrent impact lights (each dynamic light is costly on entry-level GPUs)
+	if _light_count >= (MAX_LIGHTS if GameState.q("omni") else 2):
 		return
 	_light_count += 1
 	var l := OmniLight3D.new()

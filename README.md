@@ -15,6 +15,15 @@ Before (Phase 3, top) and after (Phase 4, bottom), same scene and camera:
 ![Before and after](docs/screenshots/p4_before_after.png)
 ![Before and after, close-up](docs/screenshots/p4_before_after_closeup.png)
 
+## Play on your phone
+
+- **Android (e.g. Samsung Galaxy A21):** install `CastleDominion.apk`.
+- **iPhone (e.g. iPhone 11 Pro Max):** build the exported Xcode project on a Mac.
+
+Full step-by-step instructions, graphics presets, touch controls, the on-device benchmark and the build/test report are in **[docs/MOBILE_BUILD.md](docs/MOBILE_BUILD.md)**. Rebuild both packages with `tools/build_mobile.sh`.
+
+![iPhone layout](docs/screenshots/mobile_iphone_layout.png)
+
 ## Running
 
 1. Install **Godot 4.5.1** or newer (standard build, not .NET).
@@ -98,7 +107,7 @@ draw-call count (415–683) is still above the roughly 300 that is comfortable o
 | **Phase 1 features** | 4 maps, 5 modes, 5 towers with 5 levels, wave system, save data: all kept. |
 
 ### Not done yet
-- **iPhone not verified.** There is no iOS export preset yet and nothing has been tested on a real device. All rendering was tested on a CPU software rasterizer.
+- **Not yet tested on real phones.** Android APK and iOS Xcode project are built (see docs/MOBILE_BUILD.md), but nothing has run on physical hardware yet. All rendering was tested on a CPU software rasterizer.
 - Draw calls (about 415–683 depending on preset and horde size) are still higher than ideal for older iPhones. Next steps: fewer environment shadow casters on Medium, merging hero parts, quantizing attack frames to cut MultiMesh buckets.
 - Automated tests share the game's save file, so running them adds test items (for example, duplicate legendaries) to the local inventory.
 - The music and SFX are procedurally synthesized. They fit the game but are not studio-produced orchestral recordings.
@@ -114,6 +123,7 @@ godot --headless res://tests/smoke_test.tscn      # core gameplay + God Mode
 godot --headless res://tests/phase3_test.tscn     # heroes, defenses, blessings, loot, bosses, equipment, saves (52 checks)
 godot --headless res://tests/modes_test.tscn      # menu + every mode on every map
 godot --headless res://tests/phase4_test.tscn     # audio files/buses/volumes, quality presets, batching, grid, boss sequence
+godot --headless res://tests/mobile_test.tscn     # device presets, pixel budget, safe area, saves, back button, benchmark
 tests/shoot.sh <out_dir> <map> <battle|menu|heroes>   # real-renderer screenshots (xvfb + lavapipe Vulkan)
 # fx_showcase / boss_showcase / benchmark: run with xvfb + lavapipe like shoot.sh, passing an output path after --
 ```

@@ -158,7 +158,7 @@ func _rebuild() -> void:
 		_head_mesh.mesh = Models.tower_head(type, level)
 		_head_mesh.material_override = _prop_material(accent, 4.0, 1.4 + level * 0.3)
 	_head.add_child(_head_mesh)
-	if type in ["lightning", "fire", "ice"]:
+	if type in ["lightning", "fire", "ice"] and GameState.q("omni"):
 		_light = OmniLight3D.new()
 		_light.light_color = accent
 		_light.light_energy = 0.8 + level * 0.3

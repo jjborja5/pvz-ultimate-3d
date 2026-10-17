@@ -22,13 +22,19 @@ var _speed_btn: Button
 var _next_btn: Button
 var _modal: Control
 var _god_btn: Button
+var pause_open := false
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UITheme.apply_safe_area(self)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = UITheme.get_theme()
-	add_child(UITheme.vignette())
+	var vig := UITheme.vignette()
+	add_child(vig)
+	# the vignette spans the whole screen even though the HUD itself is inset from the notch
+	GameState.safe_area_changed.connect(func(): _extend_full_screen.call_deferred(vig))
+	_extend_full_screen.call_deferred(vig)
 	_build_top_bar()
 	_build_boss_bar()
 	_build_spell_bar()
@@ -51,6 +57,14 @@ func _ready() -> void:
 	_hint.add_theme_constant_override("outline_size", 8)
 	_hint.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.1, 0.9))
 	add_child(_hint)
+
+
+func _extend_full_screen(c: Control) -> void:
+	if is_instance_valid(c):
+		c.offset_top = -offset_top
+		c.offset_bottom = -offset_bottom
+		c.offset_left = -offset_left
+		c.offset_right = -offset_right
 
 
 func _build_top_bar() -> void:
@@ -383,10 +397,17 @@ func _process(_delta: float) -> void:
 			_fps = UITheme.label("", 16, Color(0.7, 1, 0.7))
 			_fps.position = Vector2(14, 214)
 			add_child(_fps)
-		_fps.text = "%d FPS  •  %d draws  •  %dk tris  •  sim %.1f ms" % [Engine.get_frames_per_second(),
+		_fps.text = "%d FPS (%.1f ms)  •  %d enemies  •  %d draws  •  %dk tris\nsim %.1f ms  •  RAM %d MB  •  VRAM %d MB  •  %s" % [
+			Engine.get_frames_per_second(), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+			battle.enemies.alive_count(),
 			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000,
-			battle.enemies.stats["sim_us"] / 1000.0]
+			battle.enemies.stats["sim_us"] / 1000.0,
+			Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
+			Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
+			GameState.quality_profile()["name"]]
+		_fps.add_theme_constant_override("outline_size", 6)
+		_fps.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	elif _fps:
 		_fps.queue_free()
 		_fps = null
@@ -519,6 +540,14 @@ func show_tower_sheet(t: Tower) -> void:
 
 # ------------------------------------------------------------------ modals
 
+func close_god_panel() -> bool:
+	for c in get_children():
+		if c is GodPanel:
+			c.queue_free()
+			return true
+	return false
+
+
 func open_god_panel() -> void:
 	Audio.sfx("ui_open", -6.0, 0.0, 0.05)
 	var gp := GodPanel.new()
@@ -531,8 +560,12 @@ func show_pause() -> void:
 		["Resume", UITheme.GREEN, func(): battle.toggle_pause()],
 		["Restart Battle", UITheme.BLUE, func(): battle.god_reset()],
 		["God Mode", Color(0.55, 0.38, 0.05), func(): open_god_panel()],
+		["Save Game", UITheme.BLUE, func():
+			GameState.save_state()
+			_toast("Game saved", UITheme.GREEN, "Progress is also saved automatically.")],
 		["Main Menu", UITheme.RED, func(): battle.exit_to_menu()],
 	])
+	pause_open = true
 
 
 func show_result(victory: bool, wave: int, summary := {}) -> void:
@@ -823,6 +856,7 @@ func boss_intro_end() -> void:
 
 
 func hide_modal() -> void:
+	pause_open = false
 	if _modal:
 		_modal.queue_free()
 		_modal = null

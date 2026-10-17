@@ -153,6 +153,34 @@ func _build() -> void:
 		god_fill_pads()
 	elif mode == "sandbox":
 		hud.show_hint("Sandbox: open the crown panel to spawn armies")
+	if OS.get_cmdline_user_args().has("--demo-battle"):
+		_run_demo()
+
+
+func _run_demo() -> void:
+	## Scripted battle used to verify exported builds without touch input
+	## (launch with: -- --demo-battle). Exercises towers, defenses, heroes, spells and a boss.
+	var steps := [
+		[0.5, func():
+			god_fill_pads()
+			god_build_defenses()
+			god_spawn_army("mixed", 150)],
+		[3.0, func(): god_spawn_boss("boss_molten")],
+		[7.0, func():
+			for i in heroes.size():
+				cast_hero(i)],
+		[10.0, func():
+			var e := enemies.find_nearest(Vector3(0, 0, -30), 60.0)
+			var p := e.pos if e else Vector3(0, 0, -30)
+			for id in ["meteor_shower", "frost_nova", "lightning"]:
+				spells.force_cast(id, p)],
+		[14.0, func(): print("DEMO OK: enemies=%d kills=%d fps=%d" % [enemies.alive_count(), kills, Engine.get_frames_per_second()])],
+	]
+	var t := 0.0
+	for s in steps:
+		await get_tree().create_timer(float(s[0]) - t, true, false, true).timeout
+		t = float(s[0])
+		(s[1] as Callable).call()
 
 
 func _deploy_heroes() -> void:
@@ -239,7 +267,7 @@ func _process(delta: float) -> void:
 	var speed := GameState.god_value("game_speed", 1.0)
 	Engine.time_scale = clampf(speed * (0.35 if bosses.is_cinematic() else 1.0), 0.05, 8.0)
 	enemies.lod_z = _cam_look_z + float(GameState.quality_profile()["lod_offset"])
-	enemies.max_hi_units = [50, 90, 140][clampi(int(GameState.settings.get("quality", 2)), 0, 2)]
+	enemies.max_hi_units = int(GameState.q("hi_units"))
 	_run_auto_blessings(delta)
 
 
@@ -338,7 +366,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			_cam_zoom = clampf(_cam_zoom * 1.08, 0.55, 1.5)
 	elif event is InputEventMouseMotion and _pressing:
-		if _press_pos.distance_to(event.position) > 14.0:
+		if _press_pos.distance_to(event.position) > 18.0:   # finger jitter allowance before a tap becomes a drag
 			_dragging = true
 		if _dragging and _touches.size() < 2:
 			_cam_look_z = clampf(_cam_look_z - event.relative.y * 0.09 * _cam_zoom, CAM_MIN_Z, CAM_MAX_Z)
@@ -715,6 +743,22 @@ func apply_rewards(victory: bool) -> Dictionary:
 	GameState.save_state()
 	return {"gold": run.gold_earned, "gems": run.gems_earned + (10 if victory else 0), "materials": run.materials_earned,
 		"xp": xp, "levels": levels, "items": run.loot_found, "kills": kills}
+
+
+func _notification(what: int) -> void:
+	if hud == null or game_over:
+		return
+	match what:
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			# phone call / home button: freeze the battle behind the pause menu
+			if OS.has_feature("mobile") and not get_tree().paused:
+				toggle_pause()
+		NOTIFICATION_WM_GO_BACK_REQUEST:
+			# Android back button / gesture: close panels, else toggle pause
+			if hud.close_god_panel():
+				return
+			if hud.pause_open or not get_tree().paused:
+				toggle_pause()
 
 
 func toggle_pause() -> void:

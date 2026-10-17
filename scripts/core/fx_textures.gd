@@ -16,6 +16,8 @@ static func _noise(seed_v: int, freq: float, octaves := 4) -> FastNoiseLite:
 
 
 const DISK_CACHE := "user://fx_cache/"
+const PREBAKED := "res://assets/prebaked/fx/"   # shipped Image resources (tools/prebake.gd)
+const NAMES := ["soft", "puff", "smoke", "spark", "ring", "crack", "scorch", "frost", "rune", "noise"]
 const VERSION := 3
 
 
@@ -24,7 +26,10 @@ static func get_tex(name: String) -> Texture2D:
 		return _cache[name]
 	var path := DISK_CACHE + "%s_v%d.png" % [name, VERSION]
 	var img: Image
-	if FileAccess.file_exists(path):
+	var shipped := PREBAKED + "%s_v%d.res" % [name, VERSION]
+	if ResourceLoader.exists(shipped):
+		img = load(shipped)
+	elif FileAccess.file_exists(path):
 		img = Image.load_from_file(path)
 	if img == null or img.is_empty():
 		img = _generate(name)

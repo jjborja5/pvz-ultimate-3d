@@ -36,7 +36,7 @@ func build(p_map: String) -> void:
 	_build_vegetation()
 	_build_rocks_and_ruins()
 	_build_ambient_particles()
-	if GameState.quality_profile()["weather"]:
+	if GameState.q("weather"):
 		_build_weather()
 	StaticBatcher.batch(self)
 
@@ -92,7 +92,7 @@ func _build_environment() -> void:
 	e.tonemap_exposure = 1.05
 	e.tonemap_white = 5.0
 	# restrained bloom: only genuinely bright effects (HDR > 1.4) glow
-	e.glow_enabled = true
+	e.glow_enabled = bool(GameState.q("glow"))
 	e.glow_intensity = 0.35
 	e.glow_strength = 0.9
 	e.glow_bloom = 0.0
@@ -111,7 +111,9 @@ func _build_environment() -> void:
 	e.fog_sky_affect = 0.25
 	# low valley mist that thickens below 2 m (distant mountains sit in haze)
 	e.fog_height = 2.0
-	e.fog_height_density = 0.02
+	e.fog_height_density = 0.02 if GameState.q("height_fog") else 0.0
+	if not GameState.q("height_fog"):
+		e.fog_aerial_perspective = 0.0
 	e.adjustment_enabled = true
 	e.adjustment_saturation = 1.18
 	e.adjustment_contrast = 1.08
@@ -137,6 +139,7 @@ func _build_environment() -> void:
 	fill.rotation_degrees = Vector3(-25, 150, 0)
 	fill.shadow_enabled = false
 	fill.light_specular = 0.0
+	fill.visible = bool(GameState.q("fill_light"))
 	add_child(fill)
 
 
@@ -208,6 +211,8 @@ func _build_terrain() -> void:
 	fn.fractal_octaves = 3
 	tex.noise = fn
 	mat.set_shader_parameter("detail", tex)
+	if not GameState.q("cloud_shadows"):
+		mat.set_shader_parameter("cloud_shadows", 0.0)
 	mat.set_shader_parameter("snow", 1.0 if map_id == "skyspire_peaks" else 0.0)
 	mi.material_override = mat
 	mi.name = "Terrain"

@@ -4,6 +4,7 @@ extends Node
 
 signal god_changed(key: String)
 signal settings_changed
+signal safe_area_changed
 signal unlocks_changed
 signal inventory_changed
 signal heroes_changed
@@ -45,12 +46,28 @@ var settings := {
 	"quality": 2,              # 0 Low, 1 Medium, 2 High
 	"shadow_distance": 80.0,
 	"show_fps": false,
+	"fps_cap": 60,             # 30 or 60; Low defaults to 30 for steady frame pacing on weak phones
 }
 
+## Graphics presets. Low targets entry-level Android phones (e.g. Galaxy A21), High targets
+## recent iPhones (e.g. iPhone 11 Pro Max). Nothing here removes gameplay: only rendering cost.
+##   scale / max_pixels  3D render resolution (fraction of screen, capped to a pixel budget)
+##   particles           particle multiplier + FX budget     glow / fill_light / omni   lighting extras
+##   height_fog / cloud_shadows / weather                    environmental effects
+##   lod_offset / hi_units                                   distance where enemies switch to low-poly frames
 const QUALITY_PRESETS := [
-	{"name": "Low", "scale": 0.7, "msaa": 0, "shadows": false, "particles": 0.35, "shadow_distance": 50.0, "unit_shadows": false, "lod_offset": -10.0, "weather": false},
-	{"name": "Medium", "scale": 0.85, "msaa": 0, "shadows": true, "particles": 0.7, "shadow_distance": 60.0, "unit_shadows": false, "lod_offset": -16.0, "weather": true},
-	{"name": "High", "scale": 1.0, "msaa": 2, "shadows": true, "particles": 1.0, "shadow_distance": 80.0, "unit_shadows": true, "lod_offset": -20.0, "weather": true},
+	{"name": "Low", "scale": 0.75, "max_pixels": 650000, "msaa": 0, "shadows": false, "shadow_size": 1024,
+		"particles": 0.35, "shadow_distance": 50.0, "unit_shadows": false, "lod_offset": -8.0, "hi_units": 40,
+		"weather": false, "glow": false, "fill_light": false, "omni": false, "height_fog": false,
+		"cloud_shadows": false, "fps_cap": 30},
+	{"name": "Medium", "scale": 0.85, "max_pixels": 1300000, "msaa": 0, "shadows": true, "shadow_size": 1024,
+		"particles": 0.7, "shadow_distance": 60.0, "unit_shadows": false, "lod_offset": -16.0, "hi_units": 90,
+		"weather": true, "glow": true, "fill_light": true, "omni": true, "height_fog": true,
+		"cloud_shadows": true, "fps_cap": 60},
+	{"name": "High", "scale": 1.0, "max_pixels": 2300000, "msaa": 2, "shadows": true, "shadow_size": 2048,
+		"particles": 1.0, "shadow_distance": 80.0, "unit_shadows": true, "lod_offset": -20.0, "hi_units": 140,
+		"weather": true, "glow": true, "fill_light": true, "omni": true, "height_fog": true,
+		"cloud_shadows": true, "fps_cap": 60},
 ]
 
 
@@ -58,21 +75,59 @@ func quality_profile() -> Dictionary:
 	return QUALITY_PRESETS[clampi(int(settings.get("quality", 2)), 0, QUALITY_PRESETS.size() - 1)]
 
 
+func q(key: String):
+	## Shortcut for a value of the active graphics preset.
+	return quality_profile()[key]
+
+
+static func recommended_quality() -> int:
+	## Device-based default: iPhones get High, Android phones Low unless they have lots of RAM
+	## (a proxy for a flagship GPU), desktops High.
+	if OS.has_feature("ios"):
+		return 2
+	if OS.has_feature("android"):
+		var ram := int(OS.get_memory_info().get("physical", 0))
+		return 1 if ram >= 7 * 1024 * 1024 * 1024 else 0
+	return 2
+
+
 func set_quality(level: int) -> void:
 	## Applies a preset to the individual graphics settings.
 	settings["quality"] = clampi(level, 0, QUALITY_PRESETS.size() - 1)
-	var q := quality_profile()
-	settings["shadows"] = q["shadows"]
-	settings["particles_quality"] = q["particles"]
-	settings["shadow_distance"] = q["shadow_distance"]
+	var p := quality_profile()
+	settings["shadows"] = p["shadows"]
+	settings["particles_quality"] = p["particles"]
+	settings["shadow_distance"] = p["shadow_distance"]
+	settings["fps_cap"] = p["fps_cap"]
+	apply_frame_cap()
 	settings_changed.emit()
 	save_state()
 
 
+func apply_frame_cap() -> void:
+	Engine.max_fps = int(settings.get("fps_cap", 60))
+
+
+func render_scale_for(vp: Viewport) -> float:
+	## Preset scale, reduced further so the 3D pass never exceeds the preset's pixel budget
+	## (a 1242x2688 iPhone screen at scale 1.0 would be 3.3 MP).
+	var p := quality_profile()
+	var px := float(vp.get_visible_rect().size.x * vp.get_visible_rect().size.y)
+	if vp == get_tree().root:
+		var ws := DisplayServer.window_get_size()
+		px = float(ws.x * ws.y)
+	var sc: float = p["scale"]
+	if px > 0.0:
+		sc = minf(sc, sqrt(float(p["max_pixels"]) / px))
+	return clampf(sc, 0.4, 1.0)
+
+
 func apply_viewport_quality(vp: Viewport) -> void:
-	var q := quality_profile()
-	vp.scaling_3d_scale = q["scale"]
-	vp.msaa_3d = Viewport.MSAA_2X if int(q["msaa"]) == 2 else Viewport.MSAA_DISABLED
+	var p := quality_profile()
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = render_scale_for(vp)
+	vp.msaa_3d = Viewport.MSAA_2X if int(p["msaa"]) == 2 else Viewport.MSAA_DISABLED
+	RenderingServer.directional_shadow_atlas_set_size(int(p["shadow_size"]), true)
 
 ## Hero progression: id -> {level, xp, ability_level, skin, equipped: {slot: item uid or -1}}
 var heroes := {}
@@ -85,19 +140,59 @@ var next_uid := 1
 var upgrades := {}
 
 var difficulty := 1
+var boot_ms := 0        # process start -> main menu ready (measured once per launch)
 var current_map := "verdant_pass"
 var current_mode := "campaign"
 var best_wave := {}
 
 
 func _ready() -> void:
+	var first_run := not FileAccess.file_exists(SAVE_PATH)
 	load_state()
 	_ensure_heroes()
+	if first_run:
+		set_quality(recommended_quality())   # e.g. High on iPhone 11 Pro Max, Low on Galaxy A21
 	if inventory.is_empty():
 		_starter_items()
-	if OS.has_feature("mobile") and not FileAccess.file_exists(SAVE_PATH):
-		set_quality(1)   # phones start on Medium; players can raise it in Settings
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--quality="):   # testing: force a preset, e.g. -- --quality=0
+			set_quality(int(arg.get_slice("=", 1)))
+	apply_frame_cap()
 	apply_game_speed()
+	get_tree().root.size_changed.connect(func(): safe_area_changed.emit())
+
+
+func _notification(what: int) -> void:
+	# Phones can kill a backgrounded app at any time: persist everything when we lose focus.
+	match what:
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST:
+			save_state()
+
+
+# ---------------------------------------------------------------- mobile screen
+
+func safe_insets(canvas_size: Vector2) -> Dictionary:
+	## Notch / home-indicator insets in canvas units {top, bottom, left, right}.
+	var ws := DisplayServer.window_get_size()
+	var out := {"top": 0.0, "bottom": 0.0, "left": 0.0, "right": 0.0}
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--safe-area=") and ws.y > 0:   # testing: simulate a notch, "top,bottom" in window px
+			var parts := arg.get_slice("=", 1).split(",")
+			out["top"] = float(parts[0]) * canvas_size.y / float(ws.y)
+			out["bottom"] = float(parts[1]) * canvas_size.y / float(ws.y)
+			return out
+	if ws.x <= 0 or ws.y <= 0 or not OS.has_feature("mobile"):
+		return out
+	var safe := DisplayServer.get_display_safe_area()
+	var screen := DisplayServer.screen_get_size()
+	if safe.size.x <= 0 or safe.size.y <= 0:
+		return out
+	var k := canvas_size.y / float(ws.y)
+	out["top"] = maxf(0.0, safe.position.y) * k
+	out["bottom"] = maxf(0.0, screen.y - safe.end.y) * k
+	out["left"] = maxf(0.0, safe.position.x) * k
+	out["right"] = maxf(0.0, screen.x - safe.end.x) * k
+	return out
 
 
 func _ensure_heroes() -> void:
@@ -465,12 +560,15 @@ func save_state() -> void:
 	cfg.set_value("inventory", "next_uid", next_uid)
 	cfg.set_value("upgrades", "levels", upgrades)
 	cfg.set_value("meta", "save_version", 2)
-	cfg.save(SAVE_PATH)
+	# write-then-rename so a phone killing the app mid-save never corrupts the save file
+	var tmp := SAVE_PATH + ".tmp"
+	if cfg.save(tmp) == OK:
+		DirAccess.rename_absolute(tmp, SAVE_PATH)
 
 
 func load_state() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if cfg.load(SAVE_PATH) != OK and cfg.load(SAVE_PATH + ".tmp") != OK:
 		return
 	for k in god:
 		god[k] = cfg.get_value("god", k, god[k])

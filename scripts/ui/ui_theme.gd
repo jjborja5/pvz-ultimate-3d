@@ -267,6 +267,27 @@ static func label(text: String, size := 26, color := TEXT, align := HORIZONTAL_A
 	return l
 
 
+static func apply_safe_area(c: Control) -> void:
+	## Keeps a full-screen Control clear of the iPhone notch / home indicator and Android
+	## display cutouts. Re-applied whenever the window or safe area changes.
+	var update := func():
+		if not is_instance_valid(c) or not c.is_inside_tree():
+			return
+		var ins: Dictionary = GameState.safe_insets(c.get_viewport_rect().size)
+		c.offset_top = ins["top"]
+		c.offset_bottom = -ins["bottom"]
+		c.offset_left = ins["left"]
+		c.offset_right = -ins["right"]
+	if c.is_inside_tree():
+		update.call()
+	else:
+		c.ready.connect(update, CONNECT_ONE_SHOT)
+	GameState.safe_area_changed.connect(update)
+	c.tree_exiting.connect(func():
+		if GameState.safe_area_changed.is_connected(update):
+			GameState.safe_area_changed.disconnect(update), CONNECT_ONE_SHOT)
+
+
 static func vignette() -> TextureRect:
 	## Soft dark screen-edge vignette for cinematic framing (ignores input).
 	var g := Gradient.new()

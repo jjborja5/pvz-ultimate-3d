@@ -10,6 +10,7 @@ var ui: Control
 var _t := 0.0
 var _spawn_t := 0.0
 var _screen: Control
+var _on_home := false
 var _currency_labels := {}
 
 
@@ -37,6 +38,13 @@ func _ready() -> void:
 	fx.camera = camera
 	await HeroPortraits.generate_missing(self)
 	_build_ui()
+	if GameState.boot_ms == 0:
+		GameState.boot_ms = Time.get_ticks_msec()
+		print("BOOT OK: menu ready in %d ms (%s, %s)" % [GameState.boot_ms, OS.get_name(), RenderingServer.get_video_adapter_name()])
+		if OS.get_cmdline_user_args().has("--demo-battle"):
+			GameState.current_mode = "sandbox"
+			get_tree().change_scene_to_file.call_deferred("res://scenes/battle.tscn")
+			return
 	Audio.play_music("menu")
 	GameState.god_changed.connect(func(_k): _refresh_currencies())
 
@@ -112,6 +120,7 @@ func _build_ui() -> void:
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.theme = UITheme.get_theme()
 	layer.add_child(ui)
+	UITheme.apply_safe_area(ui)
 	var shade := TextureRect.new()
 	var g := Gradient.new()
 	g.offsets = PackedFloat32Array([0.0, 0.35, 0.65, 1.0])
@@ -124,11 +133,24 @@ func _build_ui() -> void:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.stretch_mode = TextureRect.STRETCH_SCALE
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ui.add_child(shade)
+	layer.add_child(shade)   # full screen, behind the safe-area-inset UI
+	layer.move_child(shade, 0)
 	_show_home()
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST and ui != null:
+		# Android back: sub-screens return home; from home, save and leave
+		if _on_home:
+			GameState.save_state()
+			get_tree().quit()
+		else:
+			Audio.sfx("ui_back", -8.0)
+			_show_home()
+
+
 func _clear_screen() -> void:
+	_on_home = false
 	if _screen:
 		_screen.queue_free()
 	_screen = Control.new()
@@ -170,6 +192,7 @@ func _refresh_currencies() -> void:
 
 func _show_home() -> void:
 	_clear_screen()
+	_on_home = true
 	_currency_bar(_screen)
 	var v := VBoxContainer.new()
 	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -375,9 +398,21 @@ func _show_settings() -> void:
 		GameState.set_quality(i)
 		_show_settings())
 	body.add_child(qopt)
-	var qd := UITheme.label("Low: 70% render scale, no shadows, light particles  •  Medium: 85%, shadows  •  High: full resolution, MSAA, unit shadows", 17, Color(0.8, 0.8, 0.8))
+	var rec := GameState.recommended_quality()
+	var qd := UITheme.label(("Recommended for this device: %s.\n" % GameState.QUALITY_PRESETS[rec]["name"])
+		+ "Low (entry-level Android, e.g. Galaxy A21): reduced resolution, no dynamic shadows or bloom, fewer particles and lights, simpler distant enemies, 30 FPS cap.\n"
+		+ "Medium: shadows, bloom, weather, 60 FPS.\n"
+		+ "High (e.g. iPhone 11 Pro Max): full detail, MSAA, unit shadows, 60 FPS.", 17, Color(0.8, 0.8, 0.8))
 	qd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(qd)
+	var cap := CheckButton.new()
+	cap.text = "60 FPS (off = 30 FPS, cooler and steadier)"
+	cap.custom_minimum_size = Vector2(0, 72)
+	cap.button_pressed = int(GameState.settings.get("fps_cap", 60)) >= 60
+	cap.toggled.connect(func(on):
+		GameState.set_setting("fps_cap", 60 if on else 30)
+		GameState.apply_frame_cap())
+	body.add_child(cap)
 	var fpsb := CheckButton.new()
 	fpsb.text = "Show FPS / Performance Overlay"
 	fpsb.custom_minimum_size = Vector2(0, 72)
@@ -408,7 +443,21 @@ func _show_settings() -> void:
 		var key: String = pair[0]
 		s.value_changed.connect(func(v): GameState.set_setting(key, v))
 		body.add_child(s)
-	body.add_child(UITheme.label("Castle Dominion v%s  •  offline, no ads, no purchases" % ProjectSettings.get_setting("application/config/version"), 18, Color(0.7, 0.7, 0.7)))
+	var save_btn := UITheme.button("Save Game Now", UITheme.BLUE)
+	save_btn.custom_minimum_size = Vector2(0, 72)
+	save_btn.pressed.connect(func():
+		GameState.save_state()
+		save_btn.text = "Saved (progress also saves automatically)")
+	body.add_child(save_btn)
+	var bench := UITheme.button("Run Performance Benchmark", Color(0.45, 0.3, 0.6))
+	bench.custom_minimum_size = Vector2(0, 72)
+	bench.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/benchmark.tscn"))
+	body.add_child(bench)
+	var info := UITheme.label("Castle Dominion v%s  •  offline, no ads, no purchases\n%s  •  %s  •  %s" % [
+		ProjectSettings.get_setting("application/config/version"), OS.get_name(), OS.get_model_name(),
+		RenderingServer.get_video_adapter_name()], 18, Color(0.7, 0.7, 0.7))
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(info)
 
 
 func _open_god() -> void:

@@ -98,6 +98,8 @@ func _torch(pos: Vector3) -> void:
 	p.draw_pass_1 = q
 	p.position = pos + Vector3(0, 0.55, -0.35)
 	add_child(p)
+	if not GameState.q("omni"):
+		return
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.6, 0.25)
 	l.light_energy = 1.2

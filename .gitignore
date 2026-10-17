@@ -5,3 +5,7 @@
 export.cfg
 export_credentials.cfg
 *.tmp
+/build/
+*.keystore
+*.jks
+/assets/prebaked/

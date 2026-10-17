@@ -8,6 +8,8 @@ extends RefCounted
 
 const CHAR_DIR := "res://assets/kaykit/characters/"
 const CACHE_DIR := "user://bake_cache/"
+## Release builds ship pre-baked frames here (tools/prebake.gd) so phones skip the bake.
+const PREBAKED_DIR := "res://assets/prebaked/units/"
 const BAKE_VERSION := 5
 
 ## Model configs: source character, visible accessory meshes, extra weapons, animations.
@@ -60,7 +62,9 @@ static func _cache_path(config: String) -> String:
 static func _load_cache(config: String) -> Dictionary:
 	var p := _cache_path(config)
 	if not FileAccess.file_exists(p):
-		return {}
+		p = PREBAKED_DIR + p.get_file()
+		if not ResourceLoader.exists(p):
+			return {}
 	var res = ResourceLoader.load(p, "", ResourceLoader.CACHE_MODE_IGNORE)
 	if res == null or not res.has_meta("frames"):
 		return {}
