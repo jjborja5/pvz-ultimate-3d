@@ -36,6 +36,7 @@ func build(p_map: String) -> void:
 	_build_vegetation()
 	_build_rocks_and_ruins()
 	_build_ambient_particles()
+	_build_weather()
 
 
 func has_channel() -> bool:
@@ -83,37 +84,58 @@ func _build_environment() -> void:
 	e.sky = sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = pal["ambient"]
-	e.ambient_light_energy = 0.4
+	e.ambient_light_energy = 0.45
+	e.ambient_light_sky_contribution = 0.0
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	e.tonemap_exposure = 1.0
-	e.tonemap_white = 6.0
+	e.tonemap_exposure = 1.05
+	e.tonemap_white = 5.0
+	# restrained bloom: only genuinely bright effects (HDR > 1.4) glow
 	e.glow_enabled = true
-	e.glow_intensity = 0.45
-	e.glow_strength = 1.0
-	e.glow_bloom = 0.08
-	e.glow_hdr_threshold = 1.0
-	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	e.glow_intensity = 0.35
+	e.glow_strength = 0.9
+	e.glow_bloom = 0.0
+	e.glow_hdr_threshold = 1.4
+	e.glow_hdr_scale = 1.5
+	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+	e.set_glow_level(0, 0.0)
+	e.set_glow_level(1, 1.0)
+	e.set_glow_level(2, 0.6)
+	e.set_glow_level(3, 0.3)
 	e.fog_enabled = true
 	e.fog_light_color = pal["fog"]
-	e.fog_density = 0.0022
-	e.fog_aerial_perspective = 0.2
-	e.fog_sky_affect = 0.3
+	e.fog_light_energy = 0.9
+	e.fog_density = 0.0016
+	e.fog_aerial_perspective = 0.15
+	e.fog_sky_affect = 0.25
+	# low valley mist that thickens below 2 m (distant mountains sit in haze)
+	e.fog_height = 2.0
+	e.fog_height_density = 0.02
 	e.adjustment_enabled = true
-	e.adjustment_saturation = 1.25
-	e.adjustment_contrast = 1.1
+	e.adjustment_saturation = 1.18
+	e.adjustment_contrast = 1.08
 	env.environment = e
 	add_child(env)
 
 	sun = DirectionalLight3D.new()
 	sun.light_color = pal["sun"]
 	sun.light_energy = pal["sun_energy"]
-	sun.rotation_degrees = Vector3(-48, -35, 0)
+	sun.rotation_degrees = Vector3(-42, -38, 0)
 	sun.shadow_enabled = bool(GameState.settings.get("shadows", true))
-	sun.shadow_bias = 0.04
+	sun.shadow_bias = 0.03
+	sun.shadow_normal_bias = 1.2
+	sun.shadow_blur = 1.4
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 90.0
-	sun.directional_shadow_fade_start = 0.85
+	sun.directional_shadow_max_distance = float(GameState.settings.get("shadow_distance", 80.0))
+	sun.directional_shadow_fade_start = 0.8
 	add_child(sun)
+	# cool fill light from the opposite side (stylised two-tone lighting, no shadows)
+	var fill := DirectionalLight3D.new()
+	fill.light_color = (pal["ambient"] as Color).lerp(Color(0.55, 0.65, 1.0), 0.5)
+	fill.light_energy = 0.35
+	fill.rotation_degrees = Vector3(-25, 150, 0)
+	fill.shadow_enabled = false
+	fill.light_specular = 0.0
+	add_child(fill)
 
 
 func _build_terrain() -> void:
@@ -396,6 +418,58 @@ func _edge_props(paths: Array, count: int, scl: float, mat: Material = null) -> 
 			continue
 		var path: String = paths[i % paths.size()]
 		Assets.place(self, path, Vector3(x, height_at(x, z) - 0.05, z), scl * _rng.randf_range(0.8, 1.25), _rng.randf() * TAU, mat)
+
+
+func _build_weather() -> void:
+	## Map-specific atmosphere: drifting leaves, falling snow or low graveyard mist.
+	var quality: float = GameState.settings.get("particles_quality", 1.0)
+	var cfg := {}
+	match map_id:
+		"verdant_pass": cfg = {"amount": 70, "size": 0.35, "grav": Vector3(0.6, -0.8, 0.3), "life": 9.0, "tex": "puff",
+			"ramp": [Color(0.55, 0.8, 0.3, 0.0), Color(0.6, 0.85, 0.3, 0.9), Color(0.85, 0.55, 0.2, 0.0)], "y": 12.0, "unshaded": false}
+		"skyspire_peaks": cfg = {"amount": 260, "size": 0.18, "grav": Vector3(0.4, -2.2, 0.2), "life": 7.0, "tex": "soft",
+			"ramp": [Color(1, 1, 1, 0.0), Color(1, 1, 1, 0.95), Color(1, 1, 1, 0.0)], "y": 16.0, "unshaded": true}
+		"shattered_ruins": cfg = {"amount": 26, "size": 7.0, "grav": Vector3(0.25, 0.0, 0.1), "life": 14.0, "tex": "smoke",
+			"ramp": [Color(0.8, 0.82, 0.85, 0.0), Color(0.8, 0.82, 0.85, 0.16), Color(0.8, 0.82, 0.85, 0.0)], "y": 0.8, "unshaded": true}
+		_: return
+	var p := GPUParticles3D.new()
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(36, 1.0 if map_id == "shattered_ruins" else 2.0, 55)
+	pm.gravity = cfg["grav"]
+	pm.initial_velocity_min = 0.1
+	pm.initial_velocity_max = 0.6
+	pm.angle_min = -180
+	pm.angle_max = 180
+	pm.angular_velocity_min = -120 if map_id == "verdant_pass" else 0
+	pm.angular_velocity_max = 120 if map_id == "verdant_pass" else 0
+	pm.scale_min = 0.6
+	pm.scale_max = 1.4
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.2, 1.0])
+	g.colors = PackedColorArray(cfg["ramp"])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	pm.color_ramp = gt
+	p.process_material = pm
+	p.amount = maxi(8, int(int(cfg["amount"]) * quality))
+	p.lifetime = cfg["life"]
+	p.preprocess = cfg["life"]
+	p.visibility_aabb = AABB(Vector3(-45, -20, -70), Vector3(90, 40, 140))
+	var q := QuadMesh.new()
+	q.size = Vector2(cfg["size"], cfg["size"] * (0.6 if map_id == "verdant_pass" else 1.0))
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if cfg["unshaded"] else BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_texture = FXTextures.get_tex(cfg["tex"])
+	m.vertex_color_use_as_albedo = true
+	m.disable_receive_shadows = true
+	q.material = m
+	p.draw_pass_1 = q
+	p.position = Vector3(0, cfg["y"], -40)
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(p)
 
 
 func _build_ambient_particles() -> void:

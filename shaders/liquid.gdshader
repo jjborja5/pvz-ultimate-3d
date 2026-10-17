@@ -21,7 +21,11 @@ void fragment() {
 	float n2 = texture(noise_tex, w * 1.9 - vec2(TIME * scroll * 0.7, TIME * scroll * 1.3)).r;
 	float n = smoothstep(0.35, 0.8, n1 * 0.6 + n2 * 0.5);
 	vec3 c = mix(color_a, color_b, n);
+	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
 	ALBEDO = c * 0.4;
 	ROUGHNESS = roughness_value;
-	EMISSION = c * emissive * (0.4 + n);
+	METALLIC = emissive < 1.0 ? 0.2 : 0.0;
+	SPECULAR = emissive < 1.0 ? 0.8 : 0.3;
+	// sky-tinted fresnel sheen + glints on water; churning glow on lava
+	EMISSION = c * emissive * (0.4 + n) + (emissive < 1.0 ? vec3(0.6, 0.8, 1.0) * fres * 0.5 + vec3(1.0) * pow(n2, 8.0) * 0.8 : vec3(0.0));
 }

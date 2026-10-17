@@ -28,6 +28,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = UITheme.get_theme()
+	add_child(UITheme.vignette())
 	_build_top_bar()
 	_build_boss_bar()
 	_build_spell_bar()

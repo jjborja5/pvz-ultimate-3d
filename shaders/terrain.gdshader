@@ -4,6 +4,7 @@ shader_type spatial;
 
 uniform sampler2D detail : filter_linear_mipmap, repeat_enable;
 uniform float snow = 0.0;
+uniform float cloud_shadows = 0.35;
 
 varying vec3 v_world;
 varying vec3 v_normal;
@@ -23,6 +24,9 @@ void fragment() {
 	c *= mix(vec3(1.04, 1.0, 0.92), vec3(0.94, 1.0, 1.06), n1);
 	float slope = 1.0 - clamp(v_normal.y, 0.0, 1.0);
 	c *= 1.0 - slope * 0.35;
+	// drifting cloud shadows
+	float cs = texture(detail, v_world.xz * 0.008 + vec2(TIME * 0.006, TIME * 0.003)).r;
+	c *= 1.0 - cloud_shadows * smoothstep(0.45, 0.7, cs);
 	float s = snow * smoothstep(3.0, 7.0, v_world.y + n2 * 2.0) * clamp(v_normal.y * 1.4, 0.0, 1.0);
 	c = mix(c, vec3(0.92, 0.95, 1.0), s);
 	ALBEDO = c;

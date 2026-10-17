@@ -31,17 +31,17 @@ func build(p_fx: FX) -> void:
 	for i in 5:
 		var x := -12.0 + i * 6.0
 		var piece := "wall_straight_gate" if i == 2 else "wall_straight"
-		Assets.place(self, HEX + piece + ".gltf", Vector3(x, 0, 0), WALL_SCALE)
+		Assets.place(self, HEX + piece + ".gltf", Vector3(x, 0, 0), WALL_SCALE, 0.0, Assets.stone(HEX + piece + ".gltf"))
 	# gate towers flanking the gate
 	for side in [-1, 1]:
-		Assets.place(self, HEX + "building_tower_base_blue.gltf", Vector3(side * 3.2, 0, -0.4), 3.0)
+		Assets.place(self, HEX + "building_tower_base_blue.gltf", Vector3(side * 3.2, 0, -0.4), 3.0, 0.0, Assets.stone(HEX + "building_tower_base_blue.gltf"))
 		Assets.place(self, HEX + "flag_blue.gltf", Vector3(side * 3.2, GATE_TOWER_TOP, 0.6), 6.0, PI * 0.5)
 	# corner towers
 	for side in [-1, 1]:
-		Assets.place(self, HEX + "building_tower_B_blue.gltf", Vector3(side * 15.8, 0, 0.0), 4.6, side * 0.4)
+		Assets.place(self, HEX + "building_tower_B_blue.gltf", Vector3(side * 15.8, 0, 0.0), 4.6, side * 0.4, Assets.stone(HEX + "building_tower_B_blue.gltf"))
 		Assets.place(self, HEX + "flag_red.gltf", Vector3(side * 15.8, 11.4, 0.0), 8.0, PI * 0.5)
 	# keep and town behind the wall
-	Assets.place(self, HEX + "building_castle_blue.gltf", Vector3(0, 0, 10.0), 4.6)
+	Assets.place(self, HEX + "building_castle_blue.gltf", Vector3(0, 0, 10.0), 4.6, 0.0, Assets.stone(HEX + "building_castle_blue.gltf"))
 	Assets.place(self, HEX + "building_church_blue.gltf", Vector3(-11.0, 0, 9.0), 4.0, 0.3)
 	Assets.place(self, HEX + "building_barracks_blue.gltf", Vector3(11.0, 0, 8.0), 4.2, -0.4)
 	Assets.place(self, HEX + "building_home_A_blue.gltf", Vector3(-6.5, 0, 6.5), 4.0, 0.8)

@@ -87,6 +87,19 @@ static func tinted(path: String, tint: Color, amount: float, snow := 0.0, snow_h
 	return m
 
 
+static func stone(path: String, tint := Color.WHITE, amount := 0.0, brick := Vector2(1.1, 0.55)) -> ShaderMaterial:
+	## Atlas material with world-space masonry detail on stone-coloured surfaces.
+	var key := "stone|%s|%s|%.2f|%s" % [path, tint.to_html(), amount, brick]
+	if _mats.has(key):
+		return _mats[key]
+	var m: ShaderMaterial = tinted(path, tint, amount).duplicate()
+	m.set_shader_parameter("stone_detail", 1.0)
+	m.set_shader_parameter("brick_width", brick.x)
+	m.set_shader_parameter("brick_height", brick.y)
+	_mats[key] = m
+	return m
+
+
 static func place(parent: Node3D, path: String, pos: Vector3, scl: Variant = 1.0, rot_y := 0.0, mat: Material = null) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh(path)

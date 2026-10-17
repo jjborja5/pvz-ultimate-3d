@@ -95,7 +95,7 @@ func _rebuild() -> void:
 	var b: Array = BODY[type]
 	var path: String = "hexagon/%s.gltf" % b[0]
 	var s := body_scale()
-	var mat: Material = Assets.tinted(path, b[1], b[2]) if b[2] > 0.0 else null
+	var mat: Material = Assets.stone(path, b[1], b[2], Vector2(0.9, 0.45))
 	Assets.place(self, path, Vector3.ZERO, Vector3(s, s * (1.0 + 0.05 * (level - 1)), s), 0.0, mat)
 	var top := top_height() * (1.0 + 0.05 * (level - 1))
 	var flag := {"archer": "flag_green", "cannon": "flag_red", "lightning": "flag_yellow", "fire": "flag_red", "ice": "flag_blue"}

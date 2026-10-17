@@ -267,6 +267,26 @@ static func label(text: String, size := 26, color := TEXT, align := HORIZONTAL_A
 	return l
 
 
+static func vignette() -> TextureRect:
+	## Soft dark screen-edge vignette for cinematic framing (ignores input).
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.62, 1.0])
+	g.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0.05), Color(0.02, 0.0, 0.05, 0.45)])
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.45)
+	gt.fill_to = Vector2(1.15, 1.0)
+	gt.width = 128
+	gt.height = 256
+	var tr := TextureRect.new()
+	tr.texture = gt
+	tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return tr
+
+
 static func portrait(hero_id: String, size: float, framed := true) -> Control:
 	## Rendered hero portrait in a coloured frame (falls back to the vector icon).
 	var tex := HeroPortraits.get_portrait(hero_id)
