@@ -14,6 +14,18 @@ is removed on any platform.
 | Orientation | Portrait | Portrait |
 | Saves | `user://castle_dominion.cfg` in app storage, saved atomically and on backgrounding | Same, in the app's sandbox |
 
+## No computer? Start here
+
+**Samsung Galaxy A21: get the APK.** The APK is attached as a file in the Claude conversation where it was built. On the phone, tap the **CastleDominion.apk** file card to download it. If the Claude app does not offer a download, open the same conversation in **Chrome** on the phone (sign in at claude.ai) and tap the file card there. Then follow the install steps below.
+
+**iPhone 11 Pro Max: play in Safari.** Native iPhone apps can only be built with Xcode on a Mac, and cloud Mac build services still need a paid Apple Developer account. The practical no-computer option is the **browser edition**, a WebAssembly/WebGL 2 build of the same game:
+
+1. Open the private browser-edition link (a claude.ai Artifact) in Safari while signed in to claude.ai.
+2. Tap **Play**. The first load downloads about 30 MB and prepares character animations (up to a minute); later visits are faster.
+3. Optional: Share → **Add to Home Screen** for an app-like icon.
+
+The browser edition runs the full game with God Mode, starts on the Low preset, and saves progress in the browser. It is slower than a native app: single-threaded, WebGL 2 instead of Metal. Safari may also reload the page if memory runs short. It works in Chrome on Android too.
+
 ## Install on the Samsung Galaxy A21
 
 1. Copy `CastleDominion.apk` to the phone: download it on the phone, or connect a USB cable and copy it into `Download`.
@@ -96,6 +108,15 @@ holds 100, 300 and 600 enemies for 8 s each. It reports:
 **Copy Results** puts the report on the clipboard. It is also saved as `benchmark_<preset>.txt` in the app's data folder.
 
 **Settings → Show FPS / Performance Overlay** shows FPS, frame time, enemy count, draw calls, RAM and VRAM live during battles.
+
+## Rebuilding the browser edition
+
+```bash
+godot --headless --export-release "Web" build/web/index.html
+tools/web_package.py          # gzips + splits the engine and game data, writes build/web_artifact/
+```
+
+`build/web_artifact/` is a static site: the launcher page (`tools/web_shell.html`) downloads the parts, verifies their sizes, unpacks them and starts the engine. Open `index.html#demo` for a scripted test battle.
 
 ## Rebuilding
 

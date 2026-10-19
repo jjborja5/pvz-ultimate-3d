@@ -83,6 +83,8 @@ func q(key: String):
 static func recommended_quality() -> int:
 	## Device-based default: iPhones get High, Android phones Low unless they have lots of RAM
 	## (a proxy for a flagship GPU), desktops High.
+	if OS.has_feature("web"):
+		return 0   # browser build: single-threaded WebAssembly + WebGL 2, so start light
 	if OS.has_feature("ios"):
 		return 2
 	if OS.has_feature("android"):

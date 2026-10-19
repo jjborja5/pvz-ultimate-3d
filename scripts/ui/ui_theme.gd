@@ -25,6 +25,7 @@ static func font_title() -> Font:
 		_font_title = FontVariation.new()
 		_font_title.base_font = load("res://assets/fonts/Cinzel-Variable.ttf")
 		_font_title.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 800}
+		_font_title.fallbacks = [ThemeDB.fallback_font]   # symbols such as ∞ (browsers offer no system fallback)
 	return _font_title
 
 
@@ -33,6 +34,7 @@ static func font_body() -> Font:
 		_font_body = FontVariation.new()
 		_font_body.base_font = load("res://assets/fonts/Fredoka-Variable.ttf")
 		_font_body.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 600}
+		_font_body.fallbacks = [ThemeDB.fallback_font]   # symbols such as ∞ (browsers offer no system fallback)
 	return _font_body
 
 
@@ -41,6 +43,7 @@ static func font_bold() -> Font:
 		_font_body_bold = FontVariation.new()
 		_font_body_bold.base_font = load("res://assets/fonts/Fredoka-Variable.ttf")
 		_font_body_bold.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 700}
+		_font_body_bold.fallbacks = [ThemeDB.fallback_font]   # symbols such as ∞ (browsers offer no system fallback)
 	return _font_body_bold
 
 
