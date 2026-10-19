@@ -46,7 +46,9 @@ var settings := {
 	"quality": 2,              # 0 Low, 1 Medium, 2 High
 	"shadow_distance": 80.0,
 	"show_fps": false,
-	"fps_cap": 60,             # 30 or 60; Low defaults to 30 for steady frame pacing on weak phones
+	"fps_cap": 60,
+	"ui_top_margin": 0.0,      # extra clearance under browser / Claude viewer toolbars (canvas units)
+	"ui_bottom_margin": 0.0,             # 30 or 60; Low defaults to 30 for steady frame pacing on weak phones
 }
 
 ## Graphics presets. Low targets entry-level Android phones (e.g. Galaxy A21), High targets
@@ -176,6 +178,13 @@ func _notification(what: int) -> void:
 func safe_insets(canvas_size: Vector2) -> Dictionary:
 	## Notch / home-indicator insets in canvas units {top, bottom, left, right}.
 	var ws := DisplayServer.window_get_size()
+	var out := _device_insets(canvas_size, ws)
+	out["top"] += float(settings.get("ui_top_margin", 0.0))
+	out["bottom"] += float(settings.get("ui_bottom_margin", 0.0))
+	return out
+
+
+func _device_insets(canvas_size: Vector2, ws: Vector2i) -> Dictionary:
 	var out := {"top": 0.0, "bottom": 0.0, "left": 0.0, "right": 0.0}
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--safe-area=") and ws.y > 0:   # testing: simulate a notch, "top,bottom" in window px
@@ -600,4 +609,6 @@ func load_state() -> void:
 func set_setting(key: String, value) -> void:
 	settings[key] = value
 	settings_changed.emit()
+	if key.begins_with("ui_") and key.ends_with("_margin"):
+		safe_area_changed.emit()
 	save_state()

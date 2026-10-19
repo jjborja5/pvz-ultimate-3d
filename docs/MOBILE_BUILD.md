@@ -24,6 +24,8 @@ is removed on any platform.
 2. Tap **Play**. The first load downloads about 30 MB and prepares character animations (up to a minute); later visits are faster.
 3. Optional: Share → **Add to Home Screen** for an app-like icon.
 
+Inside the Claude viewer the game is drawn below a reserved band, so the viewer's close (✕) and menu buttons never overlap game buttons. If they still overlap on your phone, tap **Game too high? Tap to move it down** in that band, which cycles through taller bands; your choice is remembered. In-game, **Settings → Top/Bottom Screen Margin** adds more room. Back and Close buttons sit at the bottom of each screen, away from the corners.
+
 The browser edition runs the full game with God Mode, starts on the Low preset, and saves progress in the browser. It is slower than a native app: single-threaded, WebGL 2 instead of Metal. Safari may also reload the page if memory runs short. It works in Chrome on Android too.
 
 ## Install on the Samsung Galaxy A21

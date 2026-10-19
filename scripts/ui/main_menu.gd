@@ -261,21 +261,19 @@ func _screen_frame(title_text: String) -> VBoxContainer:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
 	p.add_child(v)
-	var head := HBoxContainer.new()
-	var back := UITheme.button("<", UITheme.BLUE, Vector2(72, 72))
-	back.pressed.connect(_show_home)
-	head.add_child(back)
+	# Title only at the top: screen corners belong to the phone / browser / Claude viewer chrome.
 	var t := UITheme.title(title_text, 42)
-	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(t)
-	var pad := Control.new()
-	pad.custom_minimum_size = Vector2(72, 0)
-	head.add_child(pad)
-	v.add_child(head)
+	v.add_child(t)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(scroll)
+	# Back lives at the bottom, full width, in easy thumb reach and away from viewer controls.
+	var back := UITheme.button("Back", UITheme.BLUE, Vector2(0, 84))
+	back.pressed.connect(func():
+		Audio.sfx("ui_back", -8.0)
+		_show_home())
+	v.add_child(back)
 	var body := VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 12)
@@ -431,13 +429,16 @@ func _show_settings() -> void:
 	dn.button_pressed = GameState.settings["show_damage_numbers"]
 	dn.toggled.connect(func(on): GameState.set_setting("show_damage_numbers", on))
 	body.add_child(dn)
-	for pair in [["particles_quality", "Particle Quality", 0.25, 1.0], ["sfx_volume", "Sound Effects Volume", 0.0, 1.0], ["music_volume", "Music Volume", 0.0, 1.0]]:
+	for pair in [["particles_quality", "Particle Quality", 0.25, 1.0], ["sfx_volume", "Sound Effects Volume", 0.0, 1.0], ["music_volume", "Music Volume", 0.0, 1.0],
+			["ui_top_margin", "Top Screen Margin (raise if browser or viewer buttons cover the game)", 0.0, 200.0],
+			["ui_bottom_margin", "Bottom Screen Margin", 0.0, 160.0]]:
 		var l := UITheme.label(pair[1], 24)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		body.add_child(l)
 		var s := HSlider.new()
 		s.min_value = pair[2]
 		s.max_value = pair[3]
-		s.step = 0.05
+		s.step = 0.05 if float(pair[3]) <= 1.0 else 4.0
 		s.value = GameState.settings[pair[0]]
 		s.custom_minimum_size = Vector2(0, 48)
 		var key: String = pair[0]

@@ -2,8 +2,11 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800&family=Fredoka:wght@500;600&display=swap">
 <style>
-  /* Layout: one full-screen stage; a launch card floats over it until the game takes the canvas. */
+  /* Layout: a reserved top band (Claude viewer / browser controls) above the game stage;
+     a launch card floats over the stage until the game takes the canvas. */
   :root {
+    --viewer-top: 0px;     /* set by script: room for the Claude viewer's close / menu buttons */
+    --viewer-bottom: 0px;
     --night: #120c1f;      /* page + canvas ground, the game's menu colour */
     --panel: #1e1533;      /* launch card */
     --gold: #f2c14e;       /* title + primary action, the game's crown gold */
@@ -17,11 +20,28 @@
   [hidden] { display: none !important; }
   html, body { height: 100%; }
   body { background: var(--night); color: var(--ink); font-family: var(--body); overflow: hidden; }
-  #stage { position: fixed; inset: 0; background: var(--night); }
+  #band {
+    position: fixed; left: 0; right: 0; top: 0;
+    height: calc(env(safe-area-inset-top, 0px) + var(--viewer-top));
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: linear-gradient(#0b0714, var(--night)); border-bottom: 1px solid #2c2145;
+  }
+  #band[data-size="0"] { display: none; }
+  #band button {
+    font: 500 0.78rem var(--body); color: var(--muted); background: none; border: 1px solid #3b2d5c;
+    border-radius: 999px; padding: 0.3rem 0.8rem; margin-bottom: 6px; cursor: pointer; letter-spacing: 0.03em;
+  }
+  #band button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  #stage {
+    position: fixed; left: 0; right: 0; background: var(--night);
+    top: calc(env(safe-area-inset-top, 0px) + var(--viewer-top));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--viewer-bottom));
+  }
   #canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
   #launch {
     position: fixed; inset: 0; display: grid; place-items: center;
-    padding-block: max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
+    padding-block: calc(24px + env(safe-area-inset-top, 0px) + var(--viewer-top)) max(24px, env(safe-area-inset-bottom, 0px));
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
     background: radial-gradient(120% 80% at 50% 20%, #2a1d47 0%, var(--night) 70%);
   }
@@ -45,6 +65,7 @@
   @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
 </style>
 
+<div id="band" data-size="0"><button id="bandsize" type="button">Game too high? Tap to move it down</button></div>
 <div id="stage"><canvas id="canvas" tabindex="0">Your browser does not support HTML5 canvas.</canvas></div>
 <div id="launch">
   <div class="card">
@@ -64,6 +85,53 @@
   const GODOT_CONFIG = __GODOT_CONFIG__;
   const PARTS = __PARTS__;   // gzip files, split to fit the host's per-file limit
   const statusEl = document.getElementById('status');
+  const root = document.documentElement;
+  const band = document.getElementById('band');
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('canvas');
+
+  // ---- Keep the game clear of the Claude viewer's own controls --------------------------
+  // Inside the Claude Artifact viewer (an embedded frame) the viewer draws close / menu buttons
+  // over the top of the page, so the game is drawn entirely below a reserved band. The band
+  // height can be cycled from the band itself; the choice is remembered on this device.
+  let embedded = false;
+  try { embedded = window.self !== window.top; } catch (e) { embedded = true; }
+  const BAND_SIZES = [0, 64, 88, 112, 136];
+  let bandIndex = embedded ? 2 : 0;
+  try {
+    const saved = localStorage.getItem('cd_band');
+    if (saved !== null && BAND_SIZES[+saved] !== undefined) bandIndex = +saved;
+  } catch (e) { /* storage unavailable: keep the default */ }
+  if (location.hash === '#viewer' || location.hash === '#viewerdemo') bandIndex = 2;   // testing: simulate the viewer
+
+  function applyBand() {
+    const px = BAND_SIZES[bandIndex];
+    root.style.setProperty('--viewer-top', px + 'px');
+    root.style.setProperty('--viewer-bottom', embedded || px ? '8px' : '0px');
+    band.dataset.size = String(px);
+    document.getElementById('bandsize').textContent = bandIndex === BAND_SIZES.length - 1
+      ? 'Tap to move the game back up' : 'Game too high? Tap to move it down';
+    fitCanvas();
+  }
+
+  // The page, not the engine, sizes the canvas (canvasResizePolicy 0) so the game fills the
+  // stage below the band instead of the whole window. Pixel density is capped at 2x for speed.
+  function fitCanvas() {
+    const r = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  }
+
+  document.getElementById('bandsize').addEventListener('click', () => {
+    bandIndex = bandIndex >= BAND_SIZES.length - 1 ? 1 : bandIndex + 1;
+    try { localStorage.setItem('cd_band', String(bandIndex)); } catch (e) { /* not saved */ }
+    applyBand();
+  });
+  window.addEventListener('resize', fitCanvas);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitCanvas);
+  GODOT_CONFIG.canvasResizePolicy = 0;
+  applyBand();
   const fill = document.getElementById('fill');
   const play = document.getElementById('play');
 
@@ -130,7 +198,7 @@
         }
         return realFetch(input, init);
       };
-      if (location.hash === '#demo') GODOT_CONFIG.args = ['--', '--demo-battle'];
+      if (location.hash === '#demo' || location.hash === '#viewerdemo') GODOT_CONFIG.args = ['--', '--demo-battle'];
       const engine = new Engine(GODOT_CONFIG);
       const reveal = () => {
         // Hand the screen to the engine; its own splash shows while the game finishes starting.

@@ -37,9 +37,6 @@ func _ready() -> void:
 	var t := UITheme.title("GOD MODE", 46)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(t)
-	var close := UITheme.button("X", UITheme.RED, Vector2(72, 72))
-	close.pressed.connect(_close)
-	header.add_child(close)
 	outer.add_child(header)
 	_tabs = HBoxContainer.new()
 	_tabs.add_theme_constant_override("separation", 6)
@@ -54,6 +51,10 @@ func _ready() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 10)
 	scroll.add_child(list)
+	# Close at the bottom (not a top-corner X, which sits under browser / Claude viewer controls)
+	var close := UITheme.button("Close God Mode", UITheme.RED, Vector2(0, 84))
+	close.pressed.connect(_close)
+	outer.add_child(close)
 
 	_section(list, "POWERS")
 	_switch(list, "enabled", "God Mode (master switch)")
